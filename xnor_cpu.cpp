@@ -21,6 +21,62 @@ void countSetBits(int x, int &y)
     } 
 } 
 
+template<typename T>
+std::vector<std::vector<T>> tensor_channel_sum(std::vector<std::vector<std::vector<T> > > &input_x)
+{
+	std::vector<std::vector<T>> output_y(input_x[0].size(), std::vector<T>(input_x[0][0].size(), 0) );
+	for(int k=0; input_x.size() > k; k++)
+	{
+		for(int j=0; input_x[0].size()>j; j++)
+		{
+			int sum = 0;
+			for (int i=0; input_x[0][0].size()>i; i++)
+			{
+				sum += input_x[k][j][i];
+			}
+			output_y[k][j] = sum / input_x[0][0].size();
+		}
+	}
+	return output_y;
+}
+
+template<typename T>
+std::vector<std::vector<double>> conv2D(std::vector<std::vector<T>> &input_x, std::pair<int, int>kernel_size)
+{
+	std::vector<std::vector<double> > output_y;
+	std::vector<std::vector<double>> scaled_x(input_x.size(), std::vector<double>(input_x[0].size(), 0));
+
+	double k = 1 / (input_x.size() * input_x[0].size());
+	
+	for (int j=0; input_x.size()>j; j++)
+	{
+		for (int i=0; input_x[0].size()>i; i++)
+		{
+			scaled_x[j][i] = input_x[j][i] * k;
+			for(int y=(1 - kernel_size.second)/2 ; (kernel_size.second + 1)/2 > y; y++)
+			{
+				if ((j+ y>0) && (j + y<input_x.size()))
+					{
+						break;
+					} 
+				for(int x=(1- kernel_size.first)/2 ; (kernel_size.first + 1)/2 > x; x++)
+				{
+
+					if (((i+ x)>0) && ((i + x)<input_x[0].size() ) )
+					{
+						break;
+					}
+					output_y[j+y][i+x] += scaled_x[j][i]; 
+				}
+
+			}
+			
+		}
+	}
+	return output_y;
+}
+
+
 
 void recursive_hash_map(std::vector<int> &key_vector, std::unordered_map<long int, int> &hash_map,
  int &iteration_count, int count_index, const std::pair<int, int>kernel_size)
@@ -345,6 +401,23 @@ int main()
 		}
 		std::cout<<std::endl;
 	}
+	std::tuple<int, int, int> tensorsize_xyz = std::make_tuple(100, 256, 256);
+	std::vector<std::vector<std::vector<double>>> input_tensor(std::get<0>(tensorsize_xyz),
+	 std::vector<std::vector<double>>(std::get<1>(tensorsize_xyz), 
+	 std::vector<double>(std::get<2>(tensorsize_xyz))));
+	
+	for (int k = 0; std::get<0>(tensorsize_xyz) > k; k++)
+	{
+		for (int j=0; std::get<1>(tensorsize_xyz)>j; j++)
+		{
+			for (int i=0; std::get<2>(tensorsize_xyz)>i; i++)
+			{
+				input_tensor[k][j][i] = (std::rand()%1000 + 1);
+			}
+		}
+	}
+	
+	auto matrix_K = tensor_channel_sum(input_tensor);
 	return 0;
 }
 
