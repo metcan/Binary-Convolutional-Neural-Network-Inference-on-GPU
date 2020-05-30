@@ -25,7 +25,6 @@ create_dir(w_path)
 create_dir(b_path)
 create_dir(a_path)
 
-
 with tf.Session() as sess:
     new_saver = tf.train.import_meta_graph('model.ckpt.meta')
     new_saver.restore(sess, tf.train.latest_checkpoint('./'))
@@ -56,20 +55,24 @@ with tf.Session() as sess:
 
             with open(w_path + name + '.txt', 'w') as p:
                 # p.write(str(weight.shape) + '\n')
-                for i in range(weight.shape[0]):
-                    p.write('*')
-                    for j in range(weight.shape[1]):
-                        p.write('/')
-                        for k in range(weight.shape[2]):
-                            p.write('_')
-                            for l in range(weight.shape[3]):
+                for i in range(weight.shape[3]):
+
+                    for j in range(weight.shape[2]):
+
+                        for k in range(weight.shape[1]):
+
+                            for z in range(weight.shape[0]):
                                 if flag:
-                                    p.write(str(int(weight[i][j][k][l])) + ',')
+                                    p.write(str(int(weight[z][k][j][i])) + ',')
                                 else:
-                                    p.write(str(weight[i][j][k][l]) + ',')
+                                    p.write(str(weight[z][k][j][i]) + ',')
+                            p.write('_')
+                        p.write('/')
+                    p.write('*')
 
             with open(w_path + 'weight_shapes' + '.txt', 'a') as p:
-                p.write(name + ' : ' + str(weight.shape) + '\n')
+                p.write(name + ' : ' + str(weight.shape[3]) + ',' + str(weight.shape[2]) + ',' + str(weight.shape[1]) +
+                        ',' + str(weight.shape[0]) + '\n')
 
             if flag:
                 with open(a_path + name + '_alpha.txt', 'w') as q:

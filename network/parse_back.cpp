@@ -132,24 +132,39 @@ int main()
     std::string a_path = "alpha/";
     std::string w_path = "weights/";
 
-    std::map<std::string,std::vector<float>> biases;
-    std::map<std::string,std::vector<float>> alphas;
+    // std::map<std::string,std::vector<float>> biases;
+    // std::map<std::string,std::vector<float>> alphas;
+
+    matrix_2d<float> biases2;
+    matrix_2d<float> alphas2;
 
     std::vector<std::string> b_files = get_files("bias");
 
     for (int i = 0; i < b_files.size(); i++)
     {
         std::vector<float> value = parse_bias_alpha(b_path + b_files[i]);
-        biases.insert(std::pair<std::string,std::vector<float>>(b_files[i],value));
+        biases2.push_back(value);
     }
+
+    // for (int i = 0; i < b_files.size(); i++)
+    // {
+    //     std::vector<float> value = parse_bias_alpha(b_path + b_files[i]);
+    //     biases.insert(std::pair<std::string,std::vector<float>>(b_files[i],value));
+    // }
 
     std::vector<std::string> a_files = get_files("alpha");
 
     for (int i = 0; i < a_files.size(); i++)
     {
         std::vector<float> value = parse_bias_alpha(a_path + a_files[i]);
-        alphas.insert(std::pair<std::string,std::vector<float>>(a_files[i],value));
+        alphas2.push_back(value);
     }
+
+    // for (int i = 0; i < a_files.size(); i++)
+    // {
+    //     std::vector<float> value = parse_bias_alpha(a_path + a_files[i]);
+    //     alphas.insert(std::pair<std::string,std::vector<float>>(a_files[i],value));
+    // }
 
     std::vector<std::string> w_files = get_files("weights");
 
@@ -173,5 +188,8 @@ int main()
 
     }
 
+    // out, in, width, height;
+
+    matrix_2d<int> inci = hidden_weights[1][7][13];
     return 0;
 }
