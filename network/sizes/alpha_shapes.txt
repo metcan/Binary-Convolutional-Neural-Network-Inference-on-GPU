@@ -1,0 +1,4 @@
+conv2d_11_weight:0 : (64,)
+conv2d_12_weight:0 : (64,)
+conv2d_21_weight:0 : (64,)
+conv2d_22_weight:0 : (64,)

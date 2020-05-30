@@ -1,0 +1,6 @@
+conv2d_0_bias:0 : (64,)
+conv2d_11_bias:0 : (64,)
+conv2d_12_bias:0 : (64,)
+conv2d_21_bias:0 : (64,)
+conv2d_22_bias:0 : (64,)
+sub2_bias:0 : (1,)
