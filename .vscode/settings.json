@@ -52,7 +52,14 @@
         "ratio": "cpp",
         "set": "cpp",
         "thread": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "csignal": "cpp",
+        "cstring": "cpp",
+        "bitset": "cpp",
+        "complex": "cpp",
+        "list": "cpp",
+        "iomanip": "cpp",
+        "typeindex": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }
