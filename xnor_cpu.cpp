@@ -40,6 +40,7 @@ std::vector<std::vector<T>> tensor_channel_sum(std::vector<std::vector<std::vect
 	return output_y;
 }
 
+// This is not real convolution
 template<typename T>
 std::vector<std::vector<double>> conv2D(std::vector<std::vector<T>> &input_x, std::pair<int, int>kernel_size)
 {
