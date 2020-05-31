@@ -28,7 +28,7 @@ public:
 	std::vector<Row> data;
 
     int col, row;
-    Matrix(int c, int r): row(r), col(c), data(c, std::vector<T>(r)){}
+    Matrix(int c, int r): row(r), col(c), data(c, std::vector<T>(r, 0)){}
 	Matrix(int c, int r, std::vector<Row> data): row(r), col(c), data(data){}
 
 
@@ -101,10 +101,10 @@ public:
 template <typename T>
 class Tensor{
     typedef Matrix<T> Mat;
-	std::vector<Mat> tensor;
+	
 
 public:
-
+	std::vector<Mat> tensor;
     int col, row, channel;
     Tensor(int col, int row, int channel): col(col), row(row), channel(channel), tensor(channel, Matrix<T>(col, row)) {}
 
@@ -372,7 +372,7 @@ void intMat2BinaryMat(Matrix<T> &input_mat, Matrix<unsigned long int> &binary_ma
 	}
 }
 template<typename T>
-Matrix<T> tensorChannelSum(Tensor<int> &input_tensor)
+Matrix<T> tensorChannelSum(Tensor<T> &input_tensor)
 {
 	Matrix<T> output_mat(input_tensor.col, input_tensor.row);
 	for(int k=0; input_tensor.row > k; k++)
@@ -509,6 +509,18 @@ void binaryMat2IntMat(Matrix<unsigned long> &input_x, const std::unordered_map<u
 		}
 	}
 }
+// output matrix must be have zero as defualt value
+template<typename T>
+void ZeroPadding2D(Matrix<T> &input_mat, Matrix<T> &output_mat, std::pair<int, int> kernel_size)
+{
+	for(int j=0; input_mat.row>j; j++)
+	{
+		for(int i=0; input_mat.col>i; i++)
+		{
+			output_mat[j + (kernel_size.second - 1)/2][i + (kernel_size.first - 1)/2] = input_mat[i][j];
+		}
+	}
+}
 // #TODO# learn std::sharedptr, Rvalue refence and std::move  
 
 // A Xnor Convolution layer is made of:
@@ -525,45 +537,95 @@ void binaryMat2IntMat(Matrix<unsigned long> &input_x, const std::unordered_map<u
 // xnor_convolution does not include pooling if needed ended padded input image.
 // A padding can be added to xnor_convolution to increase performance 
 // however it may cause some unstabilities and need testing and more time.
+
+
+template<typename in, typename out>
+void MatTypeCasting(Matrix<in>& input_mat, Matrix<out>& output_mat)
+{
+
+	for (int j=0; input_mat.col>j; j++)
+	{
+		for(int i=0; input_mat.row>i; i++)
+		{
+			output_mat[j][i] = static_cast<out>(input_mat[j][i]);
+		}
+	}
+}
+
+template<typename T>
+void xnor_convoltion_op(Matrix<T> input_matrix, Matrix<T> &output_matrix, Matrix<float> &weight_matrix, float &alpha,
+ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
+{
+	auto kernel_size = std::make_pair(weight_matrix.col, weight_matrix.row);
+	if (padding == true)
+	{
+		Matrix<T> padded_matrix(input_matrix.row + kernel_size.first -1, input_matrix.col + kernel_size.second -1);
+		ZeroPadding2D(input_matrix, padded_matrix, kernel_size);
+		input_matrix = padded_matrix; 
+	}
+	
+	
+	auto binary_input_matrix = BinaryMatMemoryAllocation<unsigned long>(std::make_pair(input_matrix.row, input_matrix.col), kernel_size);
+	auto binary_weight_matrix = BinaryMatMemoryAllocation<unsigned long>(std::make_pair(weight_matrix.row, weight_matrix.col), kernel_size);
+	intMat2BinaryMat<T>(input_matrix, binary_input_matrix, kernel_size);
+	intMat2BinaryMat<T>(weight_matrix, binary_weight_matrix, kernel_size);
+	Matrix<unsigned long int> output_mat(input_matrix.col - weight_matrix.col + 1, input_matrix.row - weight_matrix.row + 1);
+	binaryConv2D(binary_input_matrix, output_mat, binary_weight_matrix[0][0],
+	 kernel_size, std::make_pair(input_matrix.col, input_matrix.row));
+	binaryMat2IntMat(output_mat, hash_map);
+	MatTypeCasting<unsigned long, T>(output_mat, output_matrix);
+}
+
 template<typename T>
 Tensor<T> xnor_convoltion(Tensor<T> &input_tensor, Weight<T> &weight, std::vector<float> &alpha,
 std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 {
-	Tensor<T> output_tensor;
+	int output_row;
+	int output_col;
+	int output_channel;
+
 	if (padding == true)
 	{
-		Tensor<T> output_tensor(input_tensor.row, input_tensor.col, input_tensor.channel);
+		output_row = input_tensor.row;
+		output_col = input_tensor.col;
+		output_channel = weight.channel_out;
 	}
+
 	else
 	{
-		Tensor<T> output_tensor(input_tensor.row, input_tensor.col, input_tensor.channel);
+		output_row = input_tensor.row + 1 - weight.row;
+		output_col = input_tensor.col + 1 - weight.col;
+		output_channel = weight.channel_out;
 	}
-	
+	Tensor<T> output_tensor(output_row, output_col, output_channel);
+
+	auto A = tensorChannelSum<float>(input_tensor);
+	Matrix<T> padded_matrix(output_tensor.row + weight.row -1, output_tensor.col + weight.col -1);
+	ZeroPadding2D(A, padded_matrix, std::make_pair(weight.row, weight.col));
+	Matrix<float> K(padded_matrix.col - weight.col + 1, padded_matrix.row - weight.row + 1);
+	conv2D<float>(padded_matrix, K, std::make_pair(weight.row, weight.col));
+	{
+		int in, out;
+		#pragma omp parallel private(in, out) shared(input_tensor, output_tensor, alpha, hash_map)
+ 		{
+			#pragma omp for schedule(dynamic,50) collapse(2)
+			for(int out=0; weight.channel_out>out; out++)
+			{
+				for (int in=0; weight.channel_in>in; in++)
+				{
+					xnor_convoltion_op<float>(input_tensor[in], output_tensor[out], weight[out][in], alpha[0], hash_map);
+					output_tensor[out] *= K;
+					output_tensor[out] *= alpha[out];
+				}
+			}
+		}
+	}
 	return output_tensor;
 }
-template<typename T>
-void xnor_convoltion_op(Matrix<T> &input_matrix, Matrix<T> &output_matrix, Matrix<int> &weight_matrix, float &alpha,
- std::unordered_map<unsigned long, int> hash_map)
-{
-	auto kernel_size = std::make_pair(weight_matrix.col, weight_matrix.row);
-	auto binary_input_matrix = BinaryMatMemoryAllocation<unsigned long>(std::make_pair(input_matrix.row, input_matrix.col), kernel_size);
-	auto binary_weight_matrix = BinaryMatMemoryAllocation<T>(std::make_pair(weight_matrix.row, weight_matrix.col), kernel_size);
-	intMat2BinaryMat<T>(input_matrix, binary_input_matrix, kernel_size);
-	intMat2BinaryMat<T>(weight_matrix, binary_weight_matrix, kernel_size);
-	auto output_matrix(input_matrix.col - weight_matrix.col + 1, input_matrix.row - weight_matrix.row + 1);
-	binaryConv2D(binary_input_matrix, output_matrix, binary_weight_matrix[0][0],
-	 kernel_size, std::make_pair(input_matrix.col, input_matrix.row));
-	binaryMat2IntMat(output_matrix, hash_map);
-
-
-}
-
-
-
 int main()
 {
-	Tensor<int> input_tensor(64, 64, 8);
-	Weight<int> weight(3, 3, input_tensor.channel, 128);
+	Tensor<float> input_tensor(64, 64, 8);
+	Weight<float> weight(3, 3, input_tensor.channel, 128);
 	std::vector<float> scalar(weight.channel_out);
 	std::pair<int, int> kernel_size(weight.row, weight.col);
 	// Random initilizate the values
@@ -611,106 +673,161 @@ int main()
 		}
 	}
 	// Calculate hash map
-	auto hash_map =  generate_hash_map(kernel_size);
-
-	// Allocate binary tensor memory
-	std::vector<Matrix<unsigned long>> binary_tensor_;
-	for (int k=0; input_tensor.channel>k; k++)
-	{
-		binary_tensor_.push_back(BinaryMatMemoryAllocation<unsigned long>(std::make_pair(input_tensor[k].row, input_tensor[k].col), kernel_size) );
-	}
-	// Convert Int Matrix to Binary Mat
-	{
-		int k = 0;
-		#pragma omp parallel private(k) shared(input_tensor, binary_tensor_)
-		{
-			#pragma omp for schedule(dynamic,50) collapse(1)
-			for (k=0; input_tensor.channel > k ; k++)
-				{
-					intMat2BinaryMat<int>(input_tensor[k], binary_tensor_[k], kernel_size);
-				}
-		}
-	}
-	Tensor<unsigned long> binary_tensor(binary_tensor_[0].col, binary_tensor_[0].row, binary_tensor_.size()); 
-	// Allocate binary weight memory
-	std::vector<Tensor<unsigned long>> binary_weight_;
-	for (int k=0; weight.channel_out>k; k++)
-	{
-		std::vector<Matrix<unsigned long>> binary_buffer_tensor;
-		for(int j=0; weight.channel_in>j; j++)
-		{
-			binary_buffer_tensor.push_back(BinaryMatMemoryAllocation<unsigned long>
-			(std::make_pair(weight.row, weight.col), kernel_size) );
-		}
-		Tensor<unsigned long> weight_tensor(weight.row, weight.col, weight.channel_in, binary_buffer_tensor);
-		binary_weight_.push_back(weight_tensor); 
-	}
-	// Convert weights to binary
-	Weight<unsigned long> binary_weight(1, 1, binary_weight_[0].size(), binary_weight_.size(), binary_weight_);
-	for (int k=0; weight.channel_out>k; k++)
-	{
-		for(int j=0; weight.channel_in>j; j++)
-		{
-			intMat2BinaryMat(weight[k][j], binary_weight[k][j], kernel_size);
-		}
-
-	}
-	// Generate K matrix
-	auto A = tensorChannelSum<float>(input_tensor);
-	Matrix<float> K(A.col - weight.col + 1, A.row - weight.row + 1);
-	conv2D<float>(A, K, kernel_size);
-	// Binary Convolution
-		Tensor<unsigned long> output_tensor((input_tensor.col - weight.col + 1), (input_tensor.row - weight.row + 1), weight.channel_out);
-	
-	{
-		int in;
-		int out;
-		#pragma omp parallel private(in, out) shared(binary_weight, output_tensor, binary_tensor)
-		{
-			#pragma omp for  collapse(2) schedule(dynamic, 50)
-			for (out=0;weight.channel_out>out; out++)
-				{
-					for (in=0; weight.channel_in > in ; in++)
-					{
-						binaryConv2D(binary_tensor[in], output_tensor[out],
-						binary_weight[out][in][0][0], std::make_pair(weight.col, weight.row) , std::make_pair(input_tensor.col, input_tensor.row));
-					}
-				}
-
-		}
-	}
-	// Convert Binary convolution result to integer
-	{
-		int k;
-		#pragma omp parallel private(k) shared(output_tensor, hash_map)
-		{
-			#pragma omp for collapse(1) schedule(dynamic, 50)
-			for (k=0; output_tensor.channel>k; k++)
-			{
-				binaryMat2IntMat(output_tensor[k], hash_map);
-			}
-		}
-	}
-	// Multiplication with K and a scalar 
-	Tensor<float> result_tensor(output_tensor.col, output_tensor.row, output_tensor.channel);
-	for (int k=0; output_tensor.channel>k; k++)
-	{
-		for (int j=0; output_tensor.row>j; j++)
-		{
-			for(int i=0; output_tensor.row>i; i++)
-			{
-				result_tensor[k][j][i] = static_cast<float>(output_tensor[k][j][i]);
-			}
-		}
-	}
-	result_tensor *= K;
-	result_tensor *= scalar;
-	// End of BinaryConv
-	
+	auto hash_map = generate_hash_map(kernel_size);
+	auto output_tensor = xnor_convoltion<float>(input_tensor, weight, scalar, hash_map);
 	return 0;
 }
 
+// Delete this function for release
+// void xnor_debug_and_multithread()
+// {
+// 	Tensor<int> input_tensor(64, 64, 8);
+// 	Weight<int> weight(3, 3, input_tensor.channel, 128);
+// 	std::vector<float> scalar(weight.channel_out);
+// 	std::pair<int, int> kernel_size(weight.row, weight.col);
+// 	// Random initilizate the values
+// 	for(int k=0; input_tensor.channel>k; k++)
+// 	{
+// 		for(int j=0; input_tensor.col>j; j++)
+// 		{
+// 			for(int i=0; input_tensor.row>i; i++)
+// 			{
+// 				input_tensor[k][j][i] = (std::rand()%1000 - 500);
+// 				if (input_tensor[k][j][i] >= 0)
+// 				{
+// 					input_tensor[k][j][i] = 1;
+// 				}
+// 				else
+// 				{
+// 					input_tensor[k][j][i] = -1;
+// 				}
+				
+// 			}
+// 		}
+// 	}
+// 	for (int m=0; weight.channel_out>m; m++)
+// 	{
+// 		scalar[m] = static_cast<float>(rand()) / static_cast<float> (RAND_MAX);
+// 		for(int k=0; weight.channel_in>k; k++)
+// 		{
+			
+// 			for(int j=0; weight.col>j; j++)
+// 			{
+// 				for(int i=0; weight.row>i; i++)
+// 				{
+// 					weight[m][k][j][i] = (std::rand()%1000 - 500);
+// 					if (weight[m][k][j][i] >= 0)
+// 					{
+// 						weight[m][k][j][i] = 1;
+// 					}
+// 					else
+// 					{
+// 						weight[m][k][j][i] = -1;
+// 					}
+					
+// 				}
+// 			}
+// 		}
+// 	}
+// 	// Calculate hash map
+// 	auto hash_map =  generate_hash_map(kernel_size);
 
+// 	// Allocate binary tensor memory
+// 	std::vector<Matrix<unsigned long>> binary_tensor_;
+// 	for (int k=0; input_tensor.channel>k; k++)
+// 	{
+// 		binary_tensor_.push_back(BinaryMatMemoryAllocation<unsigned long>(std::make_pair(input_tensor[k].row, input_tensor[k].col), kernel_size) );
+// 	}
+// 	// Convert Int Matrix to Binary Mat
+// 	{
+// 		int k = 0;
+// 		#pragma omp parallel private(k) shared(input_tensor, binary_tensor_)
+// 		{
+// 			#pragma omp for schedule(dynamic,50) collapse(1)
+// 			for (k=0; input_tensor.channel > k ; k++)
+// 				{
+// 					intMat2BinaryMat<int>(input_tensor[k], binary_tensor_[k], kernel_size);
+// 				}
+// 		}
+// 	}
+// 	Tensor<unsigned long> binary_tensor(binary_tensor_[0].col, binary_tensor_[0].row, binary_tensor_.size()); 
+// 	// Allocate binary weight memory
+// 	std::vector<Tensor<unsigned long>> binary_weight_;
+// 	for (int k=0; weight.channel_out>k; k++)
+// 	{
+// 		std::vector<Matrix<unsigned long>> binary_buffer_tensor;
+// 		for(int j=0; weight.channel_in>j; j++)
+// 		{
+// 			binary_buffer_tensor.push_back(BinaryMatMemoryAllocation<unsigned long>
+// 			(std::make_pair(weight.row, weight.col), kernel_size) );
+// 		}
+// 		Tensor<unsigned long> weight_tensor(weight.row, weight.col, weight.channel_in, binary_buffer_tensor);
+// 		binary_weight_.push_back(weight_tensor); 
+// 	}
+// 	// Convert weights to binary
+// 	Weight<unsigned long> binary_weight(1, 1, binary_weight_[0].size(), binary_weight_.size(), binary_weight_);
+// 	for (int k=0; weight.channel_out>k; k++)
+// 	{
+// 		for(int j=0; weight.channel_in>j; j++)
+// 		{
+// 			intMat2BinaryMat(weight[k][j], binary_weight[k][j], kernel_size);
+// 		}
+
+// 	}
+// 	// Generate K matrix
+// 	auto A = tensorChannelSum<float>(input_tensor);
+// 	Matrix<float> K(A.col - weight.col + 1, A.row - weight.row + 1);
+// 	conv2D<float>(A, K, kernel_size);
+// 	// Binary Convolution
+// 		Tensor<unsigned long> output_tensor((input_tensor.col - weight.col + 1), (input_tensor.row - weight.row + 1), weight.channel_out);
+	
+// 	{
+// 		int in;
+// 		int out;
+// 		#pragma omp parallel private(in, out) shared(binary_weight, output_tensor, binary_tensor)
+// 		{
+// 			#pragma omp for  collapse(2) schedule(dynamic, 50)
+// 			for (out=0;weight.channel_out>out; out++)
+// 				{
+// 					for (in=0; weight.channel_in > in ; in++)
+// 					{
+// 						binaryConv2D(binary_tensor[in], output_tensor[out],
+// 						binary_weight[out][in][0][0], std::make_pair(weight.col, weight.row) , std::make_pair(input_tensor.col, input_tensor.row));
+// 					}
+// 				}
+
+// 		}
+// 	}
+// 	// Convert Binary convolution result to integer
+// 	{
+// 		int k;
+// 		#pragma omp parallel private(k) shared(output_tensor, hash_map)
+// 		{
+// 			#pragma omp for collapse(1) schedule(dynamic, 50)
+// 			for (k=0; output_tensor.channel>k; k++)
+// 			{
+// 				binaryMat2IntMat(output_tensor[k], hash_map);
+// 			}
+// 		}
+// 	}
+// 	// Multiplication with K and a scalar 
+// 	Tensor<float> result_tensor(output_tensor.col, output_tensor.row, output_tensor.channel);
+// 	for (int k=0; output_tensor.channel>k; k++)
+// 	{
+// 		for (int j=0; output_tensor.row>j; j++)
+// 		{
+// 			for(int i=0; output_tensor.row>i; i++)
+// 			{
+// 				result_tensor[k][j][i] = static_cast<float>(output_tensor[k][j][i]);
+// 			}
+// 		}
+// 	}
+// 	result_tensor *= K;
+// 	result_tensor *= scalar;
+// 	// End of BinaryConv
+	
+// 	return 0;
+// }
 
 
 
