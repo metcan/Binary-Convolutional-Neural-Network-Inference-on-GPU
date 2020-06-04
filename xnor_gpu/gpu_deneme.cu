@@ -141,21 +141,21 @@ size_t choose_block_size(size_t val){
 template<typename T>
 void __global__ kernel_reduce_sum(
 		const T * __restrict__  d_idata,
-		T * __restrict__ d_odata,
-        const size_t dim0,
-        const size_t dim1,
-        const size_t dim2)
+		float * __restrict__ d_odata,
+        const int dim0,
+        const int dim1,
+        const int dim2)
 {
-	size_t idx = threadIdx.x+blockDim.x*blockIdx.x;
+	int idx = threadIdx.x+blockDim.x*blockIdx.x;
 	if (idx < (dim0*dim1)){
-	  size_t tidx = idx;
-	  T tsum = 0;
-	  for (size_t i = 0; i < dim2; i++)
+	  int tidx = idx;
+	  float tsum = 0;
+	  for (int i = 0; i < dim2; i++)
 	  {
-		tsum += d_idata[tidx];
+		tsum += static_cast<float>(d_idata[tidx]);
 		tidx += dim0*dim1;
 	  }
-	  d_odata[idx] = tsum / dim2;
+	  d_odata[idx] = tsum / static_cast<float>(dim2);
 	}
 }
 
@@ -219,36 +219,38 @@ void __global__ to_binary_tensor(
 		}
 		d_odata[idx] = local_register;
 	}
+	else{
+
+	}
 }
 
 int main()
 {
 
 	// Initialize a 3d tensor
-	int row = 256;
-	int col = 256;
-	int channel = 16;
-
+	int row = 4;
+	int col = 4;
+	int channel_in = 3;
 	int kernel_row = 3;
 	int kernel_col = 3;
-	int channel_in = 8;
-	int channel_out = 16;
+	int channel_out = 3;
 
 
 
 	// Test Channel Summation
-	int *h_tensor = new int[channel * row * col];
-	int *h_matrix = new int[row * col];
+	int *h_tensor = new int[channel_in * row * col];
+	float *h_matrix = new float[row * col];
 	int	*h_weights = new int[kernel_row * kernel_col * channel_in * channel_out];
-	for (int i=0; channel * row * col>i; ++i) h_tensor[i] = (rand() % 100) + 100;
+	for (int i=0; channel_in* row * col>i; ++i) h_tensor[i] = (rand() % 2) - 2 ;
+	for (int i=0; channel_in * channel_out * kernel_row * kernel_col>i; ++i) h_weights[i] = (rand() % 2) - 3 ;
 	//for (int i=0; kernel_row * kernel_col * channel_in * channel_out > i; ++i) (rand() % 100) - 50;
 
 	// Channel summation
 	assert( h_tensor != NULL);
-	size_t sz = row * col * channel * sizeof(int);
+	size_t sz = row * col * channel_in* sizeof(int);
 	size_t rsz = row * col * sizeof(int);
 	int *d_tensor;
-	int *d_matrix;
+	float *d_matrix;
 	cudaError_t err = cudaMalloc(&d_tensor, sz);
 	if (err != cudaSuccess) {printf("cudaMalloc1 error: %s\n", cudaGetErrorString(err)); return -1;}
 	err = cudaMalloc(&d_matrix, rsz);
@@ -257,7 +259,8 @@ int main()
 	if (err != cudaSuccess) {printf("cudaMemset1 error: %s\n", cudaGetErrorString(err)); return -1;}
 	err = cudaMemset(d_matrix, 0 , rsz);
 	if (err != cudaSuccess) {printf("cudaMemset2 error: %s\n", cudaGetErrorString(err)); return -1;}
-	kernel_reduce_sum<<<((row * col)+(nTPB-1))/nTPB, nTPB>>>(d_tensor, d_matrix, col, row, channel);
+	auto block_size = choose_block_size(row * col);
+	kernel_reduce_sum<int><<<((row * col)+(block_size-1))/block_size, block_size>>>(d_tensor, d_matrix, col, row, channel_in);
 	err = cudaMemcpy( h_matrix, d_matrix, rsz, cudaMemcpyDeviceToHost);
 	if (err != cudaSuccess) {printf("result1 error: %s\n", cudaGetErrorString(err)); return -1;}
 	for (int i= 0; row>i; ++i)
@@ -271,20 +274,45 @@ int main()
 	std::cout << "Channel Sum" <<std::endl;
 	// float|int to binary
 	auto binary_size = to_binary_size(std::make_pair(col, row), std::make_pair(kernel_col, kernel_row));
-	unsigned int *h_binary_tensor = new unsigned int[channel * binary_size.second * binary_size.first];
+	unsigned int *h_binary_tensor = new unsigned int[channel_in* binary_size.second * binary_size.first];
 	unsigned *d_binary_tensor;
-	size_t bsz =  binary_size.first * binary_size.second * channel * sizeof(unsigned int);
+	size_t bsz =  binary_size.first * binary_size.second * channel_in* sizeof(unsigned int);
 	cudaMalloc(&d_binary_tensor, bsz);
-	size_t block_size = choose_block_size(binary_size.first * binary_size.second *channel);
-	to_binary_tensor<int><<<(binary_size.first * binary_size.second * channel)/block_size + 1 , block_size>>>(d_tensor, d_binary_tensor, row, binary_size.second, col, binary_size.first, channel, kernel_row, kernel_col);
+	block_size = choose_block_size(binary_size.first * binary_size.second * channel_in);
+	to_binary_tensor<int><<<(binary_size.first * binary_size.second * channel_in+ block_size - 1)/block_size, block_size>>>(d_tensor, d_binary_tensor, row, binary_size.second, col, binary_size.first, channel_in, kernel_row, kernel_col);
 	cudaMemcpy(h_binary_tensor, d_binary_tensor, bsz, cudaMemcpyDeviceToHost);
-	for (int k = 0; channel>k; ++k)
+	for (int k = 0; channel_in > k; ++k)
 	{
 		for (int i= 0; binary_size.second>i; ++i)
 		{
 			for (int j=0; binary_size.first>j; ++j)
 			{
 				std::cout<< h_binary_tensor[ (k * binary_size.second + i) * binary_size.first + j] << "  ";
+			}
+			std::cout<< std::endl;
+		}
+	}
+	std::cout << "Input Tensor to Binary" << std::endl;
+	int *d_weights;
+	auto weight_size = sizeof(int) * channel_in *channel_out * kernel_col * kernel_row;
+	cudaMalloc(&d_weights, weight_size);
+	binary_size = to_binary_size(std::make_pair(kernel_col, kernel_row), std::make_pair(kernel_col, kernel_row));
+	cudaMemcpy(d_weights, h_weights, weight_size, cudaMemcpyHostToDevice);
+	unsigned int *h_binary_weight = new unsigned int[channel_out * channel_in * binary_size.second * binary_size.first];
+	unsigned *d_binary_weight;
+	bsz =  binary_size.first * binary_size.second * channel_in* sizeof(unsigned int);
+	cudaMalloc(&d_binary_tensor, bsz);
+	block_size = choose_block_size(binary_size.first * binary_size.second * channel_in * channel_out);
+	to_binary_tensor<int><<<(binary_size.first * binary_size.second * channel_in * channel_out + block_size - 1)/block_size, block_size>>>(d_weights, d_binary_weight,
+						kernel_row, binary_size.second, kernel_col, binary_size.first, channel_in * channel_out, kernel_row, kernel_col);
+	cudaMemcpy(h_binary_weight, d_binary_weight, bsz, cudaMemcpyDeviceToHost);
+	for (int k = 0; channel_in * channel_out>k; ++k)
+	{
+		for (int i= 0; binary_size.second>i; ++i)
+		{
+			for (int j=0; binary_size.first>j; ++j)
+			{
+				std::cout<< h_binary_weight[ (k * binary_size.second + i) * binary_size.first + j] << "  ";
 			}
 			std::cout<< std::endl;
 		}
