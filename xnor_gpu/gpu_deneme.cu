@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <fstream>
 #include <sstream>
+#include <utility>
 #include <unordered_map>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -10,8 +11,19 @@
 #include <vector>
 #include <assert.h>
 
-constexpr std::pair<int, int> register_size(4, 8);
+constexpr std::pair<int, int> register_size(8, 4);
 
+std::pair<int, int> to_binary_size(std::pair<int, int>input_size,  std::pair<int, int>kernel_size){
+	int size_x = ceil((input_size.first - register_size.first)
+						/static_cast<double>(register_size.first + 1 - kernel_size.first) + 1);
+	int size_y = ceil((input_size.second - register_size.second )
+						/static_cast<double>(register_size.second + 1 - kernel_size.second) + 1);
+	if (size_x < 0)
+		size_x = 1;
+	if (size_y < 0)
+		size_y = 1;
+	return std::make_pair(size_x, size_y);
+}
 template<typename T>
 class Matrix1d{
 public:
@@ -143,7 +155,69 @@ void __global__ kernel_reduce_sum(
 		tsum += d_idata[tidx];
 		tidx += dim0*dim1;
 	  }
-	  d_odata[idx] = tsum;
+	  d_odata[idx] = tsum / dim2;
+	}
+}
+
+template<typename T>
+ __device__ void to_binary_register(
+	const T &idata,
+	unsigned int &odata,
+	 int *output_location)
+{
+	int sign = (idata > 0) - (idata < 0);
+	const unsigned int pozitive = 1;
+	const unsigned int negative = 0;
+	//int count = output_location[1] * register_size.second  + output_location[0];
+	//assert(count < register_size.second * register_size.first);
+	if (sign > -1)
+	{
+		odata = pozitive<<(output_location[1] * register_size.second  + output_location[0]) | odata;
+	}
+	else
+	{
+		odata = negative<<(output_location[1] * register_size.second  + output_location[0]) | odata;
+	}
+}
+
+template<typename T>
+void __global__ to_binary_tensor(
+	const T *  d_idata,
+	unsigned int *  d_odata,
+	const int row, const int b_row,
+	const int col, const int b_col,
+	const int channel = 1,
+	const int kernel_row = 3, const int kernel_col = 3)
+{
+	// Each thread will store a size = 32 array inside their single register
+	int idx = threadIdx.x+blockDim.x*blockIdx.x; //register IDX
+	// n*(regsiter_size - kernel_size)
+	if (idx < (b_row * b_col * channel))
+	{
+		int kernel_channel = idx / (b_row * b_col);
+		int idx_matrix = idx % (b_row * b_col);
+		int input_index[] = {(idx_matrix%b_col) * (register_size.first - kernel_col), (idx_matrix /b_col ) * (register_size.second - kernel_row), (kernel_channel)};
+		int data_idx = input_index[0] + (input_index[1] + input_index[2] * col) * row;
+		//int input_index[] = {data_idx%row, data_idx/col, data_idx/(row*col)}; // from start of array , (x, y, z)
+		int register_location[] = {0, 0};
+		unsigned int local_register;
+		for (int j=0; register_size.second>j; j++)
+		{
+			for (int i=0; register_size.first>i; i++)
+			{
+				to_binary_register<T>(d_idata[data_idx], local_register, register_location);
+				++data_idx;
+				input_index[0] += 1;
+				register_location[0] += 1;
+				if (input_index[0] == row) break;
+			}
+			data_idx = data_idx + col;
+			input_index[1] += 1;
+			register_location[0] = 0;
+			register_location[1] += 1;
+			if (input_index[1] == col) break;
+		}
+		d_odata[idx] = local_register;
 	}
 }
 
@@ -151,63 +225,69 @@ int main()
 {
 
 	// Initialize a 3d tensor
-	int row = 5;
-	int col = 5;
-	int channel = 5;
+	int row = 256;
+	int col = 256;
+	int channel = 16;
 
-	int*** tensor_ptr = new int**[channel];
-	for (int i= 0; channel>i; ++i)
-	{
-		tensor_ptr[i] = new int*[row];
-		for (int j= 0; row>j; ++j)
-		{
-			tensor_ptr[i][j] = new int[col];
-			for (int k= 0; col>k; ++k)
-			{
-				tensor_ptr[i][j][k] = (rand() % 100) - 50;
-			}
-		}
-	}
-	int ** matrix_ptr = new int*[row];
-	for (int j= 0; row>j; ++j)
-	{
-		matrix_ptr[j] = new int[col];
-		for (int k= 0; col>k; ++k)
-		{
-			matrix_ptr[j][k] = 0;
-		}
-	}
-	Matrix3d<int> *h_tensor;
-	Matrix2d<int> *h_matrix;
+	int kernel_row = 3;
+	int kernel_col = 3;
+	int channel_in = 8;
+	int channel_out = 16;
 
-	h_tensor = new Matrix3d<int>(channel, row, col, tensor_ptr);
-	h_matrix = new Matrix2d<int>(row, col, matrix_ptr);
+
 
 	// Test Channel Summation
+	int *h_tensor = new int[channel * row * col];
+	int *h_matrix = new int[row * col];
+	int	*h_weights = new int[kernel_row * kernel_col * channel_in * channel_out];
+	for (int i=0; channel * row * col>i; ++i) h_tensor[i] = (rand() % 100) + 100;
+	//for (int i=0; kernel_row * kernel_col * channel_in * channel_out > i; ++i) (rand() % 100) - 50;
 
-	assert(h_tensor->tensor!= NULL);
-	size_t sz = h_tensor->row * h_tensor->col * h_tensor->channel * sizeof(int);
-	size_t rsz = h_tensor->row * h_tensor->col * sizeof(int);
+	// Channel summation
+	assert( h_tensor != NULL);
+	size_t sz = row * col * channel * sizeof(int);
+	size_t rsz = row * col * sizeof(int);
 	int *d_tensor;
 	int *d_matrix;
 	cudaError_t err = cudaMalloc(&d_tensor, sz);
 	if (err != cudaSuccess) {printf("cudaMalloc1 error: %s\n", cudaGetErrorString(err)); return -1;}
 	err = cudaMalloc(&d_matrix, rsz);
 	if (err != cudaSuccess) {printf("cudaMalloc2 error: %s\n", cudaGetErrorString(err)); return -1;}
-	err = cudaMemcpy(d_tensor, h_tensor->tensor, sz, cudaMemcpyHostToDevice);
+	err = cudaMemcpy(d_tensor, h_tensor, sz, cudaMemcpyHostToDevice);
 	if (err != cudaSuccess) {printf("cudaMemset1 error: %s\n", cudaGetErrorString(err)); return -1;}
 	err = cudaMemset(d_matrix, 0 , rsz);
 	if (err != cudaSuccess) {printf("cudaMemset2 error: %s\n", cudaGetErrorString(err)); return -1;}
-	kernel_reduce_sum<<<((h_tensor->row * h_tensor->col)+(nTPB-1))/nTPB, nTPB>>>(d_tensor, d_matrix, h_tensor->col, h_tensor->row, h_tensor->channel);
-	err = cudaMemcpy(h_matrix->data, d_matrix, rsz, cudaMemcpyDeviceToHost);
+	kernel_reduce_sum<<<((row * col)+(nTPB-1))/nTPB, nTPB>>>(d_tensor, d_matrix, col, row, channel);
+	err = cudaMemcpy( h_matrix, d_matrix, rsz, cudaMemcpyDeviceToHost);
 	if (err != cudaSuccess) {printf("result1 error: %s\n", cudaGetErrorString(err)); return -1;}
 	for (int i= 0; row>i; ++i)
 	{
 		for (int j=0; col>j; ++j)
 		{
-			std::cout<< h_matrix->data[i][j] << "  ";
+			std::cout<< h_matrix[i * col + j] << "  ";
 		}
 		std::cout<< std::endl;
+	}
+	std::cout << "Channel Sum" <<std::endl;
+	// float|int to binary
+	auto binary_size = to_binary_size(std::make_pair(col, row), std::make_pair(kernel_col, kernel_row));
+	unsigned int *h_binary_tensor = new unsigned int[channel * binary_size.second * binary_size.first];
+	unsigned *d_binary_tensor;
+	size_t bsz =  binary_size.first * binary_size.second * channel * sizeof(unsigned int);
+	cudaMalloc(&d_binary_tensor, bsz);
+	size_t block_size = choose_block_size(binary_size.first * binary_size.second *channel);
+	to_binary_tensor<int><<<(binary_size.first * binary_size.second * channel)/block_size + 1 , block_size>>>(d_tensor, d_binary_tensor, row, binary_size.second, col, binary_size.first, channel, kernel_row, kernel_col);
+	cudaMemcpy(h_binary_tensor, d_binary_tensor, bsz, cudaMemcpyDeviceToHost);
+	for (int k = 0; channel>k; ++k)
+	{
+		for (int i= 0; binary_size.second>i; ++i)
+		{
+			for (int j=0; binary_size.first>j; ++j)
+			{
+				std::cout<< h_binary_tensor[ (k * binary_size.second + i) * binary_size.first + j] << "  ";
+			}
+			std::cout<< std::endl;
+		}
 	}
 	return 0;
 }
