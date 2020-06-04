@@ -9,6 +9,7 @@
 #include <map>
 #include <bits/stdc++.h> 
 #include <boost/algorithm/string.hpp>
+#include "conv2D.h"
 
 template<typename T>
 using weight_matrices = std::vector<std::vector<std::vector<std::vector<std::vector<T>>>>>;
@@ -169,9 +170,9 @@ int main()
     std::vector<std::string> w_files = get_files("weights");
 
     weight_matrices<float> in_out_weight;
-    weight_matrices<int> hidden_weights;
+    weight_matrices<float> hidden_weights;
     matrix_4d<float> f_matrix4d;
-    matrix_4d<int> i_matrix4d;
+    matrix_4d<float> i_matrix4d;
 
     for (int i = 0; i < w_files.size(); i++)
     {
@@ -182,14 +183,16 @@ int main()
         }
 
         else{
-            i_matrix4d = parse_weights<int>(w_path + w_files[i]);
+            i_matrix4d = parse_weights<float>(w_path + w_files[i]);
             hidden_weights.push_back(i_matrix4d);
         }
 
     }
 
-    // out, in, width, height;
+    // out, in, height, width;
 
-    matrix_2d<int> inci = hidden_weights[1][7][13];
+    matrix_3d<float> input_m = hidden_weights[0][0];
+    conv2D<float>(input_m, f_matrix4d);
     return 0;
+
 }
