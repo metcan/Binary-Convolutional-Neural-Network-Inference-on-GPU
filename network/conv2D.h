@@ -57,13 +57,13 @@ void zero_initialize_2D(matrix_2d<T> &output_mat, std::pair<int, int> output_siz
 template<typename T>
 void sum(matrix_2d<T> &out, matrix_2d<T> in)
 {
-    std::pair<int,int> in_size = get_matrix_shape<T>(in);
+    std::pair<int,int> out_size = get_matrix_shape<T>(out);
     //std::cout << in.size() << std::endl;
     //std::cout << in[0].size() << std::endl;
-    for (int i = 0; i < in_size.first; i++)
+    for (int i = 0; i < out_size.first; i++)
     {
         // in channel
-        for (int j = 0; j < in_size.second; j++)
+        for (int j = 0; j < out_size.second; j++)
         {
             out[i][j] += in[i][j];
         }
@@ -110,7 +110,7 @@ matrix_2d<T> conv_op(matrix_2d<T> input_matrix, matrix_2d<T> kernel_matrix)
 
 
 template<typename T>
-void conv2D(matrix_3d<T> input_matrix, matrix_4d<T> weight_matrix ){
+matrix_3d<T> conv2D(matrix_3d<T> input_matrix, matrix_4d<T> weight_matrix,int row, int col){
     
     std::pair<int,int> channel_dims = get_matrix_shape(weight_matrix);
     std::pair<int,int> kernel_dims = get_matrix_shape(weight_matrix[0][0]);
@@ -120,7 +120,8 @@ void conv2D(matrix_3d<T> input_matrix, matrix_4d<T> weight_matrix ){
     for (int i = 0; i < channel_dims.first; i++)
     {
         // in channel
-        matrix_2d<T> out(kernel_dims.first, matrix_1d<T>(kernel_dims.second,0));
+        
+        matrix_2d<T> out(row, matrix_1d<T>(col,0));
         zero_initialize_2D(out, kernel_dims);
         for (int j = 0; j < channel_dims.second; j++)
         {
@@ -130,6 +131,6 @@ void conv2D(matrix_3d<T> input_matrix, matrix_4d<T> weight_matrix ){
         output_matrix.push_back(out);
         out.clear();
     }
-    int x =1;
+    return output_matrix;
     
 }

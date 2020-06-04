@@ -127,6 +127,50 @@ matrix_4d<T> parse_weights(std::string path){
 
 }
 
+template <typename T>
+matrix_3d<T> LoadPGM(char * sFileName, int & nWidth, int & nHeight, int & nMaxGray)
+{
+	char aLine[256];
+	FILE * fInput = fopen(sFileName, "r");
+	if (fInput == 0)
+	{
+		perror("Cannot open file to read");
+		exit(EXIT_FAILURE);
+	}
+	// First line: version
+	fgets(aLine, 256, fInput);
+	std::cout << "\tVersion: " << aLine;
+	// Second line: comment
+	fgets(aLine, 256, fInput);
+	std::cout << "\tComment: " << aLine;
+	fseek(fInput, -1, SEEK_CUR);
+	// Third line: size
+	fscanf(fInput, "%d", &nWidth);
+	std::cout << "\tWidth: " << nWidth;
+	fscanf(fInput, "%d", &nHeight);
+	std::cout << " Height: " << nHeight << std::endl;
+	// Fourth line: max value
+	fscanf(fInput, "%d", &nMaxGray);
+	std::cout << "\tMax value: " << nMaxGray << std::endl;
+	while (getc(fInput) != '\n');
+	// Following lines: data
+	matrix_2d<T> image;
+	for (int i = 0; i < nHeight; ++i){
+        matrix_1d<T> dummy_array;
+		for (int j = 0; j < nWidth; ++j){
+			dummy_array.push_back(fgetc(fInput));
+        }
+        image.push_back(dummy_array);
+        dummy_array.clear();
+        
+    }
+    matrix_3d<T> image_3d;
+    image_3d.push_back(image);
+	fclose(fInput);
+
+	return image_3d;
+}
+
 int main()
 {
     std::string b_path = "bias/";
@@ -177,22 +221,33 @@ int main()
     for (int i = 0; i < w_files.size(); i++)
     {
 
-        if( i==0 || i == (w_files.size()-1) ){
-            f_matrix4d = parse_weights<float>(w_path + w_files[i]);
-            in_out_weight.push_back(f_matrix4d);
-        }
+        // if( i==0 || i == (w_files.size()-1) ){
+        //     f_matrix4d = parse_weights<float>(w_path + w_files[i]);
+        //     in_out_weight.push_back(f_matrix4d);
+        // }
 
-        else{
-            i_matrix4d = parse_weights<float>(w_path + w_files[i]);
-            hidden_weights.push_back(i_matrix4d);
-        }
+        // else{
+        //     i_matrix4d = parse_weights<float>(w_path + w_files[i]);
+        //     hidden_weights.push_back(i_matrix4d);
+        // }
 
+        f_matrix4d = parse_weights<float>(w_path + w_files[i]);
+        in_out_weight.push_back(f_matrix4d);
     }
 
     // out, in, height, width;
-
-    matrix_3d<float> input_m = hidden_weights[0][0];
-    conv2D<float>(input_m, f_matrix4d);
+    // matrix_3d<float> input_m = hidden_weights[0][0];
+    int nWidth, nHeight, nMaxGray;
+    matrix_3d<float> input_m = LoadPGM<float>("lena_before.pgm", nWidth, nHeight, nMaxGray);
+    matrix_3d<float> out;
+    
+    for(int i=0; i < in_out_weight.size(); i++){
+        if ( i==0 )
+            out = conv2D<float>(input_m, in_out_weight[i],nHeight,nWidth);
+        else
+            out = conv2D<float>(out, in_out_weight[i],nHeight,nWidth);
+    }
+    
     return 0;
 
 }
