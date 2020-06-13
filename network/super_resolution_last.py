@@ -89,32 +89,6 @@ def next_batch(vimagedata, scalar_scale_param=scale_parameter):
         yield np.asarray(vdatah), np.asarray(vdatal), np.asarray(vdatab)
 
 
-def binary_srcnn_network(x, name='srcnn', reuse=False, sr_factor=scale_parameter):
-
-    with tf.variable_scope(name) as scope:
-        if reuse:
-            scope.reuse_variables()
-
-        h1 = opt.conv2d(x, 64, kernel=3, stride=1, name='conv2d_0')
-        h2 = opt.prelu(h1, name='pr_0')
-
-        h1 = opt.binary_conv2d(h2, 64, kernel=3, stride=1, name='conv2d_11')
-        h1 = opt.prelu(h1, name='pr_11')
-
-        h1 = opt.binary_conv2d(h1, 64, kernel=3, stride=1, name='conv2d_12')
-        h2 = opt.prelu(h1, name='pr_12') + h2
-
-        h1 = opt.binary_conv2d(h2, 64, kernel=3, stride=1, name='conv2d_21')
-        h1 = opt.prelu(h1, name='pr_21')
-
-        h1 = opt.binary_conv2d(h1, 64, kernel=3, stride=1, name='conv2d_22')
-        h2 = opt.prelu(h1, name='pr_22') + h2
-
-        h3 = opt.conv2d(h2, 1, kernel=3, stride=1, name='sub2')
-        
-    return h3
-
-
 def binary_srcnn_network_w_binarize_act(x, name='srcnn', reuse=False, sr_factor=scale_parameter):
 
     with tf.variable_scope(name) as scope:
