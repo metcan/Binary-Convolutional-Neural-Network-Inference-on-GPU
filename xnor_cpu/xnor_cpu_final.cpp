@@ -442,9 +442,9 @@ void cellConv2D(unsigned long input_mat, unsigned long conv_kernel, const unsign
 	{
 		for (int i=0; conv_iter.first > i; i++)
 		{
-			// COnvolution operation here
-			shifter = i + j * register_size.second;
-			output_mat[output_index.second + j][output_index.first + i] = (input_mat | (conv_kernel>>shifter))&mask;
+			// Convolution operation here
+			shifter = i + j * register_size.first;
+			output_mat[output_index.second + j][output_index.first + i] = (input_mat | (conv_kernel>>shifter))&mask; // This is wrong, input matrix must be shifted.
 		}
 	}
 
@@ -535,10 +535,10 @@ void ZeroPadding2D(Matrix<T> &input_mat, Matrix<T> &output_mat, std::pair<int, i
 	{
 		for(int i=0; input_mat.col>i; i++)
 		{
-			output_mat[j + (kernel_size.second - 1)/2][i + (kernel_size.first - 1)/2] = input_mat[i][j];
+			output_mat[j + (kernel_size.second - 1)/2][i + (kernel_size.first - 1)/2] = input_mat[j][i];
 		}
 	}
-}
+}	
 // #TODO# learn std::sharedptr, Rvalue refence and std::move  
 
 // A Xnor Convolution layer is made of:
@@ -625,6 +625,7 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 	{
 		int in, out;
 		Weight<T> output_tensor_buffer(output_tensor.row, output_tensor.col, weight.channel_in, weight.channel_out);
+		auto start = std::chrono::high_resolution_clock::now();
 		#pragma omp parallel private(in, out) shared(input_tensor, output_tensor_buffer, hash_map)
  		{
 			#pragma omp for schedule(dynamic,50) collapse(2)
@@ -641,6 +642,9 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 				// output_tensor[out] *= alpha[out];
 			}
 		}
+		auto stop = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double, std::milli> multi_core(stop - start);
+		std::cout<<"Multicore xnor Kernel Performance : "<<multi_core.count()<<std::endl;
 		#pragma omp parallel private(out) shared(output_tensor_buffer, output_tensor, K, alpha)
 		{
 		#pragma omp for schedule(dynamic,50) collapse(1)
@@ -657,8 +661,8 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 }
 int main()
 {
-	Tensor<float> input_tensor(512, 512, 8);
-	Weight<float> weight(3, 3, input_tensor.channel, 128);
+	Tensor<float> input_tensor(512, 512, 64);
+	Weight<float> weight(3, 3, input_tensor.channel, 64);
 	std::vector<float> scalar(weight.channel_out);
 	std::pair<int, int> kernel_size(weight.row, weight.col);
 	// Random initilizate the values
@@ -711,7 +715,7 @@ int main()
 	auto output_tensor = xnor_convoltion<float>(input_tensor, weight, scalar, hash_map);
     auto stop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> multi_core(stop - start);
-	std::cout<<"Single convolution kernel Performance : "<<multi_core.count()<<std::endl;
+	std::cout<<"Multi core Xnor Performance : "<<multi_core.count()<<std::endl;
 	return 0;
 }
 
