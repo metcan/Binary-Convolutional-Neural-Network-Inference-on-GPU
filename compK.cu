@@ -13,15 +13,18 @@
 #define maskRows 3
 #define w (TILE_WIDTH + maskCols -1)
 
+#define type float
+
 
 //mask in constant memory
-__constant__ float deviceMaskData[maskRows * maskCols];
+template <typename T>
+__constant__ T deviceMaskData;
 
+template <typename T>
+__global__ void prepareInputKernel(T* InputImageData, const T* __restrict__ kernel,
+    T* outputImageData, int channels, int width, int height) {
 
-__global__ void prepareInputKernel(float* InputImageData, const float* __restrict__ kernel,
-    float* outputImageData, int channels, int width, int height) {
-
-    __shared__ float N_ds[w][w];	//block of share memory
+    __shared__ T N_ds[w][w];	//block of share memory
 
 
     // allocation in shared memory of image blocks
@@ -58,7 +61,7 @@ __global__ void prepareInputKernel(float* InputImageData, const float* __restric
         int y, x;
         for (y = 0; y < maskCols; y++)
             for (x = 0; x < maskRows; x++)
-                accum += N_ds[threadIdx.y + y][threadIdx.x + x] * deviceMaskData[y * maskCols + x];
+                accum += N_ds[threadIdx.y + y][threadIdx.x + x] * deviceMaskData<T>;
 
         y = blockIdx.y * TILE_WIDTH + threadIdx.y;
         x = blockIdx.x * TILE_WIDTH + threadIdx.x;
@@ -70,7 +73,8 @@ __global__ void prepareInputKernel(float* InputImageData, const float* __restric
 }
 
 
-__global__ void addMatrices(float* matrices, float* result, int channels, int width, int height)
+template <typename T>
+__global__ void addMatrices(T* matrices, T* result, int channels, int width, int height)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -79,22 +83,22 @@ __global__ void addMatrices(float* matrices, float* result, int channels, int wi
         for (int i = 0; i < channels; i++) {
             sum += matrices[i * width * height + idx];
         }
-        result[idx] = sum;
+        result[idx] = sum/channels;
     }
 }
 
-
-void clearMemory(float* p, int size) {
+template <typename T>
+void clearMemory(T* p, int size) {
     cudaMemset(p, 0, size);
     cudaFree(p);
 }
 
-
-void print(float* deviceOutputImageData, int imageHeight, int imageWidth) {
-    float* hostOutputImageData;
-    hostOutputImageData = new float[imageHeight * imageWidth];
+template <typename T>
+void print(T* deviceOutputImageData, int imageHeight, int imageWidth) {
+    T* hostOutputImageData;
+    hostOutputImageData = new T[imageHeight * imageWidth];
     cudaMemcpy(hostOutputImageData, deviceOutputImageData,
-    imageWidth * imageHeight * sizeof(float),
+    imageWidth * imageHeight * sizeof(T),
     cudaMemcpyDeviceToHost);
 
     for (int i = 0; i < imageHeight * imageWidth; i++) {
@@ -104,10 +108,11 @@ void print(float* deviceOutputImageData, int imageHeight, int imageWidth) {
     free(hostOutputImageData);
 }
 
+template <typename T>
 float* prepareInput(float *deviceInputImageData, int imageHeight, int imageWidth, int imageChannels) {
 
-    float* deviceOutputImageData;
-    float* deviceConvOutputImageData;
+    T* deviceOutputImageData;
+    T* deviceConvOutputImageData;
 
     int gridSize = imageHeight * imageWidth / BLOCKSIZE;
     int convolutionChannels = 1;
@@ -123,28 +128,29 @@ float* prepareInput(float *deviceInputImageData, int imageHeight, int imageWidth
 
 
     cudaMalloc((void**)&deviceOutputImageData, imageWidth * imageHeight *
-        sizeof(float));
+        sizeof(T));
 
     cudaMalloc((void**)&deviceConvOutputImageData, imageWidth * imageHeight *
-        sizeof(float));
+        sizeof(T));
 
-    cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight * sizeof(float));
+    cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight * sizeof(T));
 
 
-    addMatrices << <gridSize, BLOCKSIZE >> > (deviceInputImageData, deviceOutputImageData,
+    addMatrices<T> << <gridSize, BLOCKSIZE >> > (deviceInputImageData, deviceOutputImageData,
         imageChannels, imageWidth, imageHeight);
 
-    //print(deviceOutputImageData, imageHeight, imageWidth);
-
-    clearMemory(deviceInputImageData, imageWidth * imageHeight *
-        imageChannels * sizeof(float));
+    print<T>(deviceOutputImageData, imageHeight, imageWidth);
 
 
-    prepareInputKernel << <dimGrid, dimBlock >> > (deviceOutputImageData, deviceMaskData, deviceConvOutputImageData,
+    clearMemory<T>(deviceInputImageData, imageWidth * imageHeight *
+        imageChannels * sizeof(T));
+
+
+    prepareInputKernel<T> << <dimGrid, dimBlock >> > (deviceOutputImageData, &deviceMaskData<T>, deviceConvOutputImageData,
         convolutionChannels, imageWidth, imageHeight);
 
     
-    clearMemory(deviceOutputImageData, imageWidth * imageHeight * sizeof(float));
+    clearMemory(deviceOutputImageData, imageWidth * imageHeight * sizeof(T));
 
     return deviceConvOutputImageData;
 }
@@ -152,47 +158,46 @@ float* prepareInput(float *deviceInputImageData, int imageHeight, int imageWidth
 
 int main() {
 
-    int imageChannels = 3;
+    int imageChannels = 64;
     int imageHeight = 8;
     int imageWidth = 8;
 
-    float* hostInputImageData;
-    float* deviceInputImageData;
-    float* deviceOutputImageData;
+    type* hostInputImageData;
+    type* deviceInputImageData;
+    type* deviceOutputImageData;
 
-    hostInputImageData = new float[imageHeight * imageWidth * imageChannels];
+    hostInputImageData = new type[imageHeight * imageWidth * imageChannels];
 
     // call only once in the main
-    float hostMaskData[maskRows * maskCols];
-    for (int i = 0; i < maskRows * maskCols; i++)
-    {
-        hostMaskData[i] = 1.0 / (maskRows * maskCols);
-    }
-    cudaMemcpyToSymbol(deviceMaskData, hostMaskData, maskRows * maskCols * sizeof(float));
+    type hostMaskData;
+
+    hostMaskData = 1.0 / (maskRows * maskCols);
+
+    cudaMemcpyToSymbol(&deviceMaskData<type>, &hostMaskData, 1 * sizeof(type));
 
     for (int i = 0; i < imageChannels * imageHeight * imageWidth; i++) {
-        hostInputImageData[i] = float((float)rand() / (RAND_MAX));
+        hostInputImageData[i] = type((float)rand() / (RAND_MAX));
     }
 
-    for (int i = 0; i < imageChannels * imageHeight * imageWidth; i++) {
-        printf("%f, ", hostInputImageData[i]);
-    }
+    //for (int i = 0; i < imageChannels * imageHeight * imageWidth; i++) {
+    //    printf("%f, ", hostInputImageData[i]);
+    //}
 
     std::cout << "\n" << std::endl;
 
     cudaMalloc((void**)&deviceInputImageData, imageWidth * imageHeight *
-        imageChannels * sizeof(float));
+        imageChannels * sizeof(type));
 
     cudaMemcpy(deviceInputImageData, hostInputImageData,
-        imageWidth * imageHeight * imageChannels * sizeof(float),
+        imageWidth * imageHeight * imageChannels * sizeof(type),
         cudaMemcpyHostToDevice);
     
-    deviceOutputImageData = prepareInput(deviceInputImageData, imageHeight, imageWidth, imageChannels);
+    deviceOutputImageData = prepareInput<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels);
          
     cudaMemset(deviceInputImageData, 0, imageWidth * imageHeight *
-        imageChannels * sizeof(float));
+        imageChannels * sizeof(type));
     cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight *
-        sizeof(float));
+        sizeof(type));
 
     free(hostInputImageData);
     cudaFree(deviceInputImageData);
