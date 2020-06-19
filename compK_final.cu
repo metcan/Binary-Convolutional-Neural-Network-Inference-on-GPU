@@ -7,18 +7,49 @@
 #include "math.h"
 #include "chrono"
 
-#define BLOCKSIZE 32
-#define TILE_WIDTH 16
+#define IM_WIDTH 1024
+#define IM_HEIGHT 1024
+#define IM_CHANNEL 64
+
+#define BLOCKSIZE 64
+#define TILE_WIDTH 64
 #define maskCols 3
 #define maskRows 3
 #define w (TILE_WIDTH + maskCols -1)
-
 #define type float
+
+
+
+// chose convolution kernel type
+// gl    -> global memory
+// gl_co -> global and constant memory
+// sh    -> shared memory
+// sh_co -> shared and constant memory
+
+std::string memory_type = "gl";
+
+// to print results
+bool debug = false;
 
 
 //mask in constant memory
 template <typename T>
-__constant__ T deviceMaskData;
+__constant__ T deviceMaskData[maskRows * maskCols];
+
+
+template <typename T>
+__global__ void addMatrices(T* __restrict__ g_idata, T* __restrict__ g_odata, const int channels, const int width, const int height)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < height * width) {
+        float sum = 0;
+        for (int i = 0; i < channels; i++) {
+            sum += g_idata[i * width * height + idx];
+        }
+        g_odata[idx] = sum / channels;
+    }
+}
 
 
 template <typename T>
@@ -50,7 +81,7 @@ __global__ void prepareInputGlobalKernel(T* InputImageData, T kernel_value,
                         accum += InputImageData[(currentRow * width + currentCol) * channels + k] *
                             kernel_value;
                     }
-                    else accum = 0;
+                    else accum += 0;
                 }
 
             }
@@ -88,9 +119,9 @@ __global__ void prepareInputGlobalConstantKernel(T* InputImageData,
                     if (currentRow >= 0 && currentRow < height && currentCol >= 0 && currentCol < width) {
 
                         accum += InputImageData[(currentRow * width + currentCol) * channels + k] *
-                            deviceMaskData<T>;
+                            deviceMaskData<type>[i * maskRows + j];
                     }
-                    else accum = 0;
+                    else accum += 0;
                 }
 
             }
@@ -195,7 +226,7 @@ __global__ void prepareInputSharedConstantKernel(T* InputImageData,
         int y, x;
         for (y = 0; y < maskCols; y++)
             for (x = 0; x < maskRows; x++)
-                accum += N_ds[threadIdx.y + y][threadIdx.x + x] * deviceMaskData<T>;
+                accum += N_ds[threadIdx.y + y][threadIdx.x + x] * deviceMaskData<type>[y * maskCols + x];;
 
         y = blockIdx.y * TILE_WIDTH + threadIdx.y;
         x = blockIdx.x * TILE_WIDTH + threadIdx.x;
@@ -205,22 +236,6 @@ __global__ void prepareInputSharedConstantKernel(T* InputImageData,
 
     }
 }
-
-
-template <typename T>
-__global__ void addMatrices(T* matrices, T* result, int channels, int width, int height)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (idx < height * width) {
-        float sum = 0;
-        for (int i = 0; i < channels; i++) {
-            sum += matrices[i * width * height + idx];
-        }
-        result[idx] = sum/channels;
-    }
-}
-
 
 template <typename T>
 void clearMemory(T* p, int size) {
@@ -234,35 +249,38 @@ void print(T* deviceOutputImageData, int imageHeight, int imageWidth) {
     T* hostOutputImageData;
     hostOutputImageData = new T[imageHeight * imageWidth];
     cudaMemcpy(hostOutputImageData, deviceOutputImageData,
-    imageWidth * imageHeight * sizeof(T),
-    cudaMemcpyDeviceToHost);
-
+        imageWidth * imageHeight * sizeof(T),
+        cudaMemcpyDeviceToHost);
     for (int i = 0; i < imageHeight * imageWidth; i++) {
         printf("%f, ", hostOutputImageData[i]);
     }
-
+    printf("\n");
     free(hostOutputImageData);
 }
 
 
 //using only global memory
 template <typename T>
-T* prepareInputGlobal(float* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels) {
+T* prepareInputGlobal(T* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels, float& elapsed_time_addition, float& elapsed_time_convolution) {
 
     T* deviceOutputImageData;
     T* deviceConvOutputImageData;
 
-    int gridSize = imageHeight * imageWidth / BLOCKSIZE;
+    int gridSize = (imageHeight * imageWidth + BLOCKSIZE-1) / BLOCKSIZE;
     int convolutionChannels = 1;
 
-    float numberBlockXTiling = (float)imageWidth / TILE_WIDTH;
-    float numberBlockYTiling = (float)imageHeight / TILE_WIDTH;
-
-    int numberBlockX = ceil(numberBlockXTiling);
-    int numberBlockY = ceil(numberBlockYTiling);
+    int numberBlockX = (imageWidth + BLOCKSIZE - 1) / BLOCKSIZE;
+    int numberBlockY = (imageHeight + BLOCKSIZE - 1) / BLOCKSIZE;
 
     dim3 dimGrid(numberBlockX, numberBlockY);
-    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
+    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE, 1);
+
+    cudaEvent_t start1, stop1;
+    cudaEvent_t start2, stop2;
+    cudaEventCreate(&start1);
+    cudaEventCreate(&start2);
+    cudaEventCreate(&stop1);
+    cudaEventCreate(&stop2);
 
 
     cudaMalloc((void**)&deviceOutputImageData, imageWidth * imageHeight *
@@ -273,21 +291,52 @@ T* prepareInputGlobal(float* deviceInputImageData, int imageHeight, int imageWid
 
     cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight * sizeof(T));
 
+    cudaEventRecord(start1, 0);
 
     addMatrices<T> << <gridSize, BLOCKSIZE >> > (deviceInputImageData, deviceOutputImageData,
         imageChannels, imageWidth, imageHeight);
 
-    //print<T>(deviceOutputImageData, imageHeight, imageWidth);
+    cudaEventRecord(stop1, 0);
+    cudaEventSynchronize(stop1);
 
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Addition Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
 
     clearMemory<T>(deviceInputImageData, imageWidth * imageHeight *
         imageChannels * sizeof(T));
 
     T kernel_value = 1.0 / (maskRows * maskCols);
 
+    cudaEventRecord(start2, 0);
+
     prepareInputGlobalKernel<T> << <dimGrid, dimBlock >> > (deviceOutputImageData, kernel_value, deviceConvOutputImageData,
         convolutionChannels, imageWidth, imageHeight);
 
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Convolution Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceConvOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
+        
+
+    cudaEventRecord(stop2, 0);
+    cudaEventSynchronize(stop2);
+
+    cudaEventElapsedTime(&elapsed_time_addition, start1, stop1);
+    cudaEventElapsedTime(&elapsed_time_convolution, start2, stop2);
+
+
+    cudaEventDestroy(start1);
+    cudaEventDestroy(start2);
+    cudaEventDestroy(stop1);
+    cudaEventDestroy(stop2);
 
     clearMemory(deviceOutputImageData, imageWidth * imageHeight * sizeof(T));
 
@@ -297,22 +346,26 @@ T* prepareInputGlobal(float* deviceInputImageData, int imageHeight, int imageWid
 
 // using global memory and constant memory
 template <typename T>
-T* prepareInputGlobalConstant(float* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels) {
+T* prepareInputGlobalConstant(T* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels, float& elapsed_time_addition, float& elapsed_time_convolution) {
 
     T* deviceOutputImageData;
     T* deviceConvOutputImageData;
 
-    int gridSize = imageHeight * imageWidth / BLOCKSIZE;
+    int gridSize = (imageHeight * imageWidth + BLOCKSIZE - 1) / BLOCKSIZE;
     int convolutionChannels = 1;
 
-    float numberBlockXTiling = (float)imageWidth / TILE_WIDTH;
-    float numberBlockYTiling = (float)imageHeight / TILE_WIDTH;
-
-    int numberBlockX = ceil(numberBlockXTiling);
-    int numberBlockY = ceil(numberBlockYTiling);
+    int numberBlockX = (imageWidth + BLOCKSIZE - 1) / BLOCKSIZE;
+    int numberBlockY = (imageHeight + BLOCKSIZE - 1) / BLOCKSIZE;
 
     dim3 dimGrid(numberBlockX, numberBlockY);
-    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
+    dim3 dimBlock(BLOCKSIZE, BLOCKSIZE, 1);
+
+    cudaEvent_t start1, stop1;
+    cudaEvent_t start2, stop2;
+    cudaEventCreate(&start1);
+    cudaEventCreate(&start2);
+    cudaEventCreate(&stop1);
+    cudaEventCreate(&stop2);
 
 
     cudaMalloc((void**)&deviceOutputImageData, imageWidth * imageHeight *
@@ -324,19 +377,49 @@ T* prepareInputGlobalConstant(float* deviceInputImageData, int imageHeight, int 
     cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight * sizeof(T));
 
 
+    cudaEventRecord(start1, 0);
+
     addMatrices<T> << <gridSize, BLOCKSIZE >> > (deviceInputImageData, deviceOutputImageData,
         imageChannels, imageWidth, imageHeight);
 
-    //print<T>(deviceOutputImageData, imageHeight, imageWidth);
+    cudaEventRecord(stop1, 0);
+    cudaEventSynchronize(stop1);
 
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Addition Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
 
     clearMemory<T>(deviceInputImageData, imageWidth * imageHeight *
         imageChannels * sizeof(T));
 
+    cudaEventRecord(start2, 0);
 
     prepareInputGlobalConstantKernel<T> << <dimGrid, dimBlock >> > (deviceOutputImageData, deviceConvOutputImageData,
         convolutionChannels, imageWidth, imageHeight);
 
+    cudaEventRecord(stop2, 0);
+    cudaEventSynchronize(stop2);
+
+    cudaEventElapsedTime(&elapsed_time_addition, start1, stop1);
+    cudaEventElapsedTime(&elapsed_time_convolution, start2, stop2);
+
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Convolution Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceConvOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
+        
+
+    cudaEventDestroy(start1);
+    cudaEventDestroy(start2);
+    cudaEventDestroy(stop1);
+    cudaEventDestroy(stop2);
 
     clearMemory(deviceOutputImageData, imageWidth * imageHeight * sizeof(T));
 
@@ -346,23 +429,26 @@ T* prepareInputGlobalConstant(float* deviceInputImageData, int imageHeight, int 
 
 //using only shared memory
 template <typename T>
-float* prepareInputShared(float* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels) {
+float* prepareInputShared(T* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels, float& elapsed_time_addition, float& elapsed_time_convolution) {
 
     T* deviceOutputImageData;
     T* deviceConvOutputImageData;
 
-    int gridSize = imageHeight * imageWidth / BLOCKSIZE;
+    int gridSize = (imageWidth * imageHeight + (BLOCKSIZE - 1)) / BLOCKSIZE;
     int convolutionChannels = 1;
 
-    float numberBlockXTiling = (float)imageWidth / TILE_WIDTH;
-    float numberBlockYTiling = (float)imageHeight / TILE_WIDTH;
-
-    int numberBlockX = ceil(numberBlockXTiling);
-    int numberBlockY = ceil(numberBlockYTiling);
+    int numberBlockX = (imageWidth + (TILE_WIDTH - 1)) / TILE_WIDTH;
+    int numberBlockY = (imageHeight + (TILE_WIDTH - 1)) / TILE_WIDTH;
 
     dim3 dimGrid(numberBlockX, numberBlockY);
     dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
 
+    cudaEvent_t start1, stop1;
+    cudaEvent_t start2, stop2;
+    cudaEventCreate(&start1);
+    cudaEventCreate(&start2);
+    cudaEventCreate(&stop1);
+    cudaEventCreate(&stop2);
 
     cudaMalloc((void**)&deviceOutputImageData, imageWidth * imageHeight *
         sizeof(T));
@@ -373,19 +459,52 @@ float* prepareInputShared(float* deviceInputImageData, int imageHeight, int imag
     cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight * sizeof(T));
 
 
+    cudaEventRecord(start1, 0);
+
     addMatrices<T> << <gridSize, BLOCKSIZE >> > (deviceInputImageData, deviceOutputImageData,
         imageChannels, imageWidth, imageHeight);
 
-    //print<T>(deviceOutputImageData, imageHeight, imageWidth);
+    cudaEventRecord(stop1, 0);
+    cudaEventSynchronize(stop1);
+
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Addition Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
 
 
     clearMemory<T>(deviceInputImageData, imageWidth * imageHeight *
         imageChannels * sizeof(T));
 
     T kernel_value = 1.0 / (maskRows * maskCols);
+
+    cudaEventRecord(stop2, 0);
+    cudaEventSynchronize(stop2);
+
     prepareInputSharedKernel<T> << <dimGrid, dimBlock >> > (deviceOutputImageData, deviceConvOutputImageData, kernel_value,
         convolutionChannels, imageWidth, imageHeight);
 
+    cudaEventRecord(stop2, 0);
+    cudaEventSynchronize(stop2);
+
+    cudaEventElapsedTime(&elapsed_time_addition, start1, stop1);
+    cudaEventElapsedTime(&elapsed_time_convolution, start2, stop2);
+
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Convolution Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceConvOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
+
+    cudaEventDestroy(start1);
+    cudaEventDestroy(start2);
+    cudaEventDestroy(stop1);
+    cudaEventDestroy(stop2);
 
     clearMemory(deviceOutputImageData, imageWidth * imageHeight * sizeof(T));
 
@@ -395,23 +514,27 @@ float* prepareInputShared(float* deviceInputImageData, int imageHeight, int imag
 
 //using constant and shared memory
 template <typename T>
-T* prepareInputSharedConstant(float* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels) {
+T* prepareInputSharedConstant(T* deviceInputImageData, int imageHeight, int imageWidth, int imageChannels, float &elapsed_time_addition, float& elapsed_time_convolution) {
 
     T* deviceOutputImageData;
     T* deviceConvOutputImageData;
 
-    int gridSize = imageHeight * imageWidth / BLOCKSIZE;
+    int gridSize = (imageWidth * imageHeight + (BLOCKSIZE - 1)) / BLOCKSIZE;
     int convolutionChannels = 1;
 
-    float numberBlockXTiling = (float)imageWidth / TILE_WIDTH;
-    float numberBlockYTiling = (float)imageHeight / TILE_WIDTH;
+    int numberBlockX = (imageWidth + (TILE_WIDTH-1)) / TILE_WIDTH;
+    int numberBlockY = (imageHeight + (TILE_WIDTH-1)) / TILE_WIDTH;
 
-    int numberBlockX = ceil(numberBlockXTiling);
-    int numberBlockY = ceil(numberBlockYTiling);
 
     dim3 dimGrid(numberBlockX, numberBlockY);
     dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
 
+    cudaEvent_t start1, stop1;
+    cudaEvent_t start2, stop2;
+    cudaEventCreate(&start1);
+    cudaEventCreate(&start2);
+    cudaEventCreate(&stop1);
+    cudaEventCreate(&stop2);
 
     cudaMalloc((void**)&deviceOutputImageData, imageWidth * imageHeight *
         sizeof(T));
@@ -421,20 +544,48 @@ T* prepareInputSharedConstant(float* deviceInputImageData, int imageHeight, int 
 
     cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight * sizeof(T));
 
-
+    cudaEventRecord(start1, 0);
+    
     addMatrices<T> << <gridSize, BLOCKSIZE >> > (deviceInputImageData, deviceOutputImageData,
         imageChannels, imageWidth, imageHeight);
+    
+    cudaEventRecord(stop1, 0);
+    cudaEventSynchronize(stop1);
 
-    //print<T>(deviceOutputImageData, imageHeight, imageWidth);
-
-
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Addition Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
+    
     clearMemory<T>(deviceInputImageData, imageWidth * imageHeight *
         imageChannels * sizeof(T));
-
+  
+    cudaEventRecord(start2, 0);
 
     prepareInputSharedConstantKernel<T> << <dimGrid, dimBlock >> > (deviceOutputImageData, deviceConvOutputImageData,
         convolutionChannels, imageWidth, imageHeight);
 
+    cudaEventRecord(stop2, 0);
+    cudaEventSynchronize(stop2);
+
+    cudaEventElapsedTime(&elapsed_time_addition, start1, stop1);
+    cudaEventElapsedTime(&elapsed_time_convolution, start2, stop2);
+
+    if (debug == true) {
+        std::cout << "-------------------------------------" << std::endl;
+        std::cout << "Convolution Results" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+        print<T>(deviceConvOutputImageData, imageHeight, imageWidth);
+        std::cout << "-------------------------------------" << std::endl;
+    }
+
+    cudaEventDestroy(start1);
+    cudaEventDestroy(start2);
+    cudaEventDestroy(stop1);
+    cudaEventDestroy(stop2);
 
     clearMemory(deviceOutputImageData, imageWidth * imageHeight * sizeof(T));
 
@@ -443,22 +594,25 @@ T* prepareInputSharedConstant(float* deviceInputImageData, int imageHeight, int 
 
 int main() {
 
-    int imageChannels = 64;
-    int imageHeight = 8;
-    int imageWidth = 8;
+    int imageChannels = IM_CHANNEL;
+    int imageHeight = IM_HEIGHT;
+    int imageWidth = IM_WIDTH;
 
     type* hostInputImageData;
     type* deviceInputImageData;
     type* deviceOutputImageData;
 
+    float elapsedTimeAddition, elapsedTimeConvolution;
+
     hostInputImageData = new type[imageHeight * imageWidth * imageChannels];
 
     // call only once in the main
-    type hostMaskData;
+    type hostMaskData[maskCols * maskRows];
 
-    hostMaskData = 1.0 / (maskRows * maskCols);
+    for (int i = 0; i < maskCols * maskRows; i++)
+        hostMaskData[i] = static_cast<type>(1.0 / (maskRows * maskCols));
 
-    cudaMemcpyToSymbol(&deviceMaskData<type>, &hostMaskData, 1 * sizeof(type));
+    cudaMemcpyToSymbol(deviceMaskData<type>, hostMaskData, maskCols * maskRows * sizeof(type));
 
     for (int i = 0; i < imageChannels * imageHeight * imageWidth; i++) {
         hostInputImageData[i] = type((float)rand() / (RAND_MAX));
@@ -477,27 +631,30 @@ int main() {
         imageWidth * imageHeight * imageChannels * sizeof(type),
         cudaMemcpyHostToDevice);
     
-    std::chrono::high_resolution_clock::time_point startGlobal = std::chrono::high_resolution_clock::now();
-    deviceOutputImageData = prepareInputGlobal<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels);
-    std::chrono::high_resolution_clock::time_point endGlobal = std::chrono::high_resolution_clock::now();
-
-    //std::chrono::high_resolution_clock::time_point startGlobalConstant = std::chrono::high_resolution_clock::now();
-    //deviceOutputImageData = prepareInputGlobalConstant<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels);
-    //std::chrono::high_resolution_clock::time_point endGlobalConstant = std::chrono::high_resolution_clock::now();
-
-    //std::chrono::high_resolution_clock::time_point startShared = std::chrono::high_resolution_clock::now();
-    //deviceOutputImageData = prepareInputShared<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels);
-    //std::chrono::high_resolution_clock::time_point endShared = std::chrono::high_resolution_clock::now();
-
-    //std::chrono::high_resolution_clock::time_point startSharedConstant = std::chrono::high_resolution_clock::now();
-    //deviceOutputImageData = prepareInputSharedConstant<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels);
-    //std::chrono::high_resolution_clock::time_point endSharedConstant = std::chrono::high_resolution_clock::now();
+    if (memory_type.compare("gl") == 0 )  {
+        deviceOutputImageData = prepareInputGlobal<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels,
+            elapsedTimeAddition, elapsedTimeConvolution);
+    }
     
-    std::chrono::duration<double>  durationGlobal = endGlobal - startGlobal;
-    //std::chrono::duration<double>  durationGlobalConstant = endGlobalConstant - startGlobalConstant;
-    //std::chrono::duration<double>  durationShared = endShared - startShared;
-    //std::chrono::duration<double>  durationSharedConstant = endSharedConstant - startSharedConstant;
+    else if (memory_type.compare("gl_co") == 0) {
+        deviceOutputImageData = prepareInputGlobalConstant<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels,
+            elapsedTimeAddition, elapsedTimeConvolution);
+    }
     
+
+    else if (memory_type.compare("sh") == 0) {
+        deviceOutputImageData = prepareInputShared<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels,
+            elapsedTimeAddition, elapsedTimeConvolution);
+    }
+   
+
+    else if (memory_type.compare("sh_co") == 0) {
+        deviceOutputImageData = prepareInputSharedConstant<type>(deviceInputImageData, imageHeight, imageWidth, imageChannels,
+            elapsedTimeAddition, elapsedTimeConvolution);
+    }
+    
+    
+
     std::cout << "-------------------------------------" << std::endl;
     std::cout << "Timing Results" << std::endl;
     std::cout << "-------------------------------------" << std::endl;
@@ -505,21 +662,36 @@ int main() {
     std::cout << imageChannels << "x" << imageWidth << "x" << imageHeight << std::endl;
     std::cout << "-------------------------------------" << std::endl;
     
-    std::cout << "Using global memory" << std::endl;
-    std::cout << "elapsed in time: " << durationGlobal.count()*1000 <<std::endl;
-    std::cout << "-------------------------------------" << std::endl;
+    if (memory_type.compare("gl") == 0) {
+        std::cout << "Using global memory" << std::endl;
+        std::cout << "elapsed time for addition: " << elapsedTimeAddition << " ms" << std::endl;
+        std::cout << "elapsed time for convolution: " << elapsedTimeConvolution << " ms" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+    }
+    
+    else if (memory_type.compare("gl_co") == 0) {
+        std::cout << "Using global and constant memory" << std::endl;
+        std::cout << "elapsed time for addition: " << elapsedTimeAddition << " ms" << std::endl;
+        std::cout << "elapsed time for convolution: " << elapsedTimeConvolution << " ms" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+    }
+    
 
-    //std::cout << "Using global and constant memory" << std::endl;
-    //std::cout << "elapsed in time: " << durationGlobalConstant.count() * 1000 << std::endl;
-    //std::cout << "-------------------------------------" << std::endl;
+    else if (memory_type.compare("sh") == 0) {
+        std::cout << "Using shared memory" << std::endl;
+        std::cout << "elapsed time for addition: " << elapsedTimeAddition << " ms" << std::endl;
+        std::cout << "elapsed time for convolution: " << elapsedTimeConvolution << " ms" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+    }
+    
 
-    //std::cout << "Using shared memory" << std::endl;
-    //std::cout << "elapsed in time: " << durationShared.count() * 1000 << std::endl;
-    //std::cout << "-------------------------------------" << std::endl;
-
-    //std::cout << "Using shared and constant memory" << std::endl;
-    //std::cout << "elapsed in time: " << durationSharedConstant.count() * 1000 << std::endl;
-    //std::cout << "-------------------------------------" << std::endl;
+    else if (memory_type.compare("sh_co") == 0) {
+        std::cout << "Using shared and constant memory" << std::endl;
+        std::cout << "elapsed time for addition: " << elapsedTimeAddition << " ms" << std::endl;
+        std::cout << "elapsed time for convolution: " << elapsedTimeConvolution << " ms" << std::endl;
+        std::cout << "-------------------------------------" << std::endl;
+    }
+    
 
 
     cudaMemset(deviceInputImageData, 0, imageWidth * imageHeight *
@@ -532,3 +704,10 @@ int main() {
     cudaFree(deviceOutputImageData);
 
 }
+
+
+
+
+
+
+
