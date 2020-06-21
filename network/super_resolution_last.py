@@ -102,13 +102,13 @@ def binary_srcnn_network_w_binarize_act(x, name='srcnn', reuse=False, sr_factor=
         h1 = opt.binarize_act(h1, name='pr_11')
 
         h1 = opt.binary_conv2d(h1, 64, kernel=3, stride=1, name='conv2d_12')
-        h2 = opt.binarize_act(h1, name='pr_12') + h2
+        h2 = opt.binarize_act(h1, name='pr_12')
 
         h1 = opt.binary_conv2d(h2, 64, kernel=3, stride=1, name='conv2d_21')
         h1 = opt.binarize_act(h1, name='pr_21')
 
         h1 = opt.binary_conv2d(h1, 64, kernel=3, stride=1, name='conv2d_22')
-        h2 = opt.binarize_act(h1, name='pr_22') + h2
+        h2 = opt.binarize_act(h1, name='pr_22')
 
         h3 = opt.conv2d(h2, 1, kernel=3, stride=1, name='sub2')
 
