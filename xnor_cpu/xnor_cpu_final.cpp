@@ -585,12 +585,32 @@ void xnor_convoltion_op(Matrix<T> input_matrix, Matrix<T> &output_matrix, Matrix
 	
 	auto binary_input_matrix = BinaryMatMemoryAllocation<unsigned long>(std::make_pair(input_matrix.row, input_matrix.col), kernel_size);
 	auto binary_weight_matrix = BinaryMatMemoryAllocation<unsigned long>(std::make_pair(weight_matrix.row, weight_matrix.col), kernel_size);
+	{
+	auto start = std::chrono::high_resolution_clock::now();
 	intMat2BinaryMat<T>(input_matrix, binary_input_matrix, kernel_size);
+	auto stop = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double, std::milli> multi_core(stop - start);
+	std::cout<<"int2binary Performance : "<<multi_core.count()<<std::endl;
+	}
+	
 	intMat2BinaryMat<T>(weight_matrix, binary_weight_matrix, kernel_size);
 	Matrix<unsigned long int> output_mat(input_matrix.col - weight_matrix.col + 1, input_matrix.row - weight_matrix.row + 1);
+	{
+	auto start = std::chrono::high_resolution_clock::now();
 	binaryConv2D(binary_input_matrix, output_mat, binary_weight_matrix[0][0],
 	 kernel_size, std::make_pair(input_matrix.col, input_matrix.row));
+	auto stop = std::chrono::high_resolution_clock::now();
+
+	std::chrono::duration<double, std::milli> multi_core(stop - start);
+	std::cout<<"Xnor Convolution Kernel Performance : "<<multi_core.count()<<std::endl;
+	}
+	{
+	auto start = std::chrono::high_resolution_clock::now();
 	binaryMat2IntMat(output_mat, hash_map);
+	auto stop = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double, std::milli> multi_core(stop - start);
+	std::cout<<"Binary2int Performance : "<<multi_core.count()<<std::endl;
+	}
 	MatTypeCasting<unsigned long, T>(output_mat, output_matrix);
 }
 
@@ -628,7 +648,7 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 		auto start = std::chrono::high_resolution_clock::now();
 		#pragma omp parallel private(in, out) shared(input_tensor, output_tensor_buffer, hash_map)
  		{
-			#pragma omp for schedule(dynamic,50) collapse(2)
+			#pragma omp for schedule(dynamic,50)// collapse(2)
 			for(int out=0; weight.channel_out>out; out++)
 			{
 				
@@ -661,8 +681,8 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 }
 int main()
 {
-	Tensor<float> input_tensor(512, 512, 64);
-	Weight<float> weight(3, 3, input_tensor.channel, 64);
+	Tensor<float> input_tensor(512, 512, 1);
+	Weight<float> weight(3, 3, input_tensor.channel, 1);
 	std::vector<float> scalar(weight.channel_out);
 	std::pair<int, int> kernel_size(weight.row, weight.col);
 	// Random initilizate the values

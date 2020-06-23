@@ -9,6 +9,12 @@ RM := rm -rf
 # All of the sources participating in the build are defined here
 -include sources.mk
 -include subdir.mk
+-include xnor_gpu/subdir.mk
+-include xnor_gpu/Debug/subdir.mk
+-include xnor_gpu/Debug/.metadata/.plugins/org.eclipse.cdt.make.core/subdir.mk
+-include xnor_gpu/.metadata/.plugins/org.eclipse.cdt.make.core/subdir.mk
+-include xnor_cpu/subdir.mk
+-include network/subdir.mk
 
 OS_SUFFIX := $(subst Linux,linux,$(subst Darwin/x86_64,darwin,$(shell uname -s)/$(shell uname -m)))
 

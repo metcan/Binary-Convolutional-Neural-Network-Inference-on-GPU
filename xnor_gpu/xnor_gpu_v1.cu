@@ -14,8 +14,12 @@
 
 #define NUM_STREAMS 16
 
+
+
+// This is first version of the gpu implementation
+// This version is just for testing sub-parts of the xnor convolution
 constexpr std::pair<int, int> register_size(8, 4);
-constexpr int nTPB=256;
+constexpr int nTPB = 256;
 
 template <typename T>
 struct matrix1d {
@@ -190,6 +194,7 @@ void __global__ binaryConv2d(
 	int conv_per_column = register_size.first - (kernel_col - 1);
 	int output_index_x = (idx % binary_col) * conv_per_column;
 	int output_index_y = (idx / binary_col) * conv_per_row;
+	//return;
 	if (idx < binary_row * binary_col)
 	{
 	unsigned int register_buffer = binary_mat[idx];
@@ -208,7 +213,6 @@ void __global__ binaryConv2d(
 	{
 		mask = (mask<<register_size.first) | static_cast<unsigned int>(std::pow(2, kernel_col) - 1);
 	}
-
 
 	unsigned int shifter = 0;
 	for (int j=0; conv_per_row>j; ++j)
@@ -290,32 +294,7 @@ matrix2d<unsigned int> floatMat2BinaryMat(matrix2d<float> &d_input_matrix, int k
 }
 
 
-// This part must be updated to concurrent execution
-matrix3d<float> xnor_convolution_v2(matrix3d<float> &h_input_tensor, weight4d<float> &h_weight_tensor, bool padding=true)
-{
-		// Use cudaMallocHost
-		//cudaStream_t streams[NUM_STREAMS];
-		//for (int i = 0; i < NUM_STREAMS; ++i) { cudaStreamCreate(&streams[i]); }
 
-		auto h_output_tensor = h_input_tensor;
-		matrix3d<float> d_input_tensor;
-		d_input_tensor.col = h_input_tensor.col;
-		d_input_tensor.row = h_input_tensor.row;
-		d_input_tensor.channel = h_input_tensor.channel;
-		cudaMalloc((void **)&d_input_tensor.arr, h_input_tensor.channel * sizeof(float));
-		for (int i=0; i < h_input_tensor.channel; ++i)
-		{
-			cudaMalloc((void **)&d_input_tensor.arr[i], h_input_tensor.row * h_input_tensor.col * sizeof(float));
-		}
-		cudaMemcpy(d_input_tensor.arr, h_input_tensor.arr, h_input_tensor.channel * sizeof(float), cudaMemcpyHostToDevice);
-		if (padding)
-		{
-
-		}
-
-
-	return h_output_tensor;
-}
 
 matrix3d<float> xnor_convolution_v1(matrix3d<float> &h_input_tensor, weight4d<float> &h_weight_tensor, bool padding=true)
 {
@@ -343,6 +322,19 @@ matrix3d<float> xnor_convolution_v1(matrix3d<float> &h_input_tensor, weight4d<fl
 		}
 		for (int i=0; i< h_weight_tensor.channel_in; ++i)
 		{
+			cudaEvent_t start, stop;
+			cudaEvent_t start1, stop1;
+			cudaEvent_t start2, stop2;
+			cudaEvent_t start3, stop3;
+			cudaEventCreate(&start2);
+			cudaEventCreate(&stop2);
+			cudaEventCreate(&start);
+			cudaEventCreate(&stop);
+			cudaEventCreate(&start1);
+			cudaEventCreate(&stop1);
+			cudaEventCreate(&start3);
+			cudaEventCreate(&stop3);
+			float milliseconds = 0;
 			matrix2d<float> d_input_matrix;
 			d_input_matrix.col = h_input_tensor.col;
 			d_input_matrix.row = h_input_tensor.row;
@@ -359,9 +351,19 @@ matrix3d<float> xnor_convolution_v1(matrix3d<float> &h_input_tensor, weight4d<fl
 			d_padded_matrix.row = d_input_matrix.row + h_weight_tensor.row - 1;
 			cudaMalloc((void **)&d_padded_matrix.arr, d_padded_matrix.col * d_padded_matrix.row * sizeof(float));
 			auto block_size = choose_block_size(d_padded_matrix.row * d_padded_matrix.col);
+			cudaEventRecord(start3, 0);
 			zeroPadding<float><<<(d_padded_matrix.row * d_padded_matrix.col + block_size - 1)/ block_size , block_size>>>(d_padded_matrix.arr, d_padded_matrix.arr, h_weight_tensor.row, h_weight_tensor.col, d_input_matrix.row, d_input_matrix.col, d_padded_matrix.row, d_padded_matrix.col);
+			cudaEventRecord(stop3, 0);
+			cudaEventSynchronize(stop3);
+			cudaEventElapsedTime(&milliseconds, start3, stop3);
+			std::cout<<"ZeroPadding Time= "<< milliseconds<<std::endl;
 			cudaFree(d_input_matrix.arr);
+			cudaEventRecord(start, 0);
 			auto d_binary_input_matrix = floatMat2BinaryMat(d_padded_matrix, h_weight_tensor.row, h_weight_tensor.col);
+			cudaEventRecord(stop, 0);
+			cudaEventSynchronize(stop);
+			cudaEventElapsedTime(&milliseconds, start, stop);
+			std::cout<<"Integer to binary conversion Time= "<< milliseconds<<std::endl;
 			cudaFree(d_padded_matrix.arr);
 			auto d_binary_weight_matrix = floatMat2BinaryMat(d_weight_matrix, h_weight_tensor.row, h_weight_tensor.col);
 			cudaFree(d_weight_matrix.arr);
@@ -370,14 +372,30 @@ matrix3d<float> xnor_convolution_v1(matrix3d<float> &h_input_tensor, weight4d<fl
 			d_binary_output_matrix.col = h_input_tensor.col;
 			d_binary_output_matrix.row = h_input_tensor.row;
 			cudaMalloc((void **)&d_binary_output_matrix.arr, d_binary_output_matrix.col * d_binary_output_matrix.row * sizeof(float));
+			cudaEventRecord(start1, 0);
 			binaryConv2d<<<(d_binary_input_matrix.row * d_binary_input_matrix.col + block_size - 1)/ block_size ,block_size>>>(d_binary_input_matrix.arr, d_binary_output_matrix.arr, d_binary_weight_matrix.arr,
 																												d_binary_input_matrix.row, d_binary_input_matrix.col,
 																												d_weight_matrix.row, d_weight_matrix.col,
 																												d_binary_output_matrix.row, d_binary_output_matrix.col);
+			cudaEventRecord(stop1, 0);
+			cudaEventSynchronize(stop1);
+			cudaEventElapsedTime(&milliseconds, start1, stop1);
+			std::cout<<"Convolution Time= "<< milliseconds<<std::endl;
 			block_size = choose_block_size(d_binary_output_matrix.col * d_binary_output_matrix.row);
+			cudaEventRecord(start2, 0);
 			binary2int<<<(d_binary_output_matrix.row * d_binary_output_matrix.col + block_size - 1)/ block_size ,block_size>>>(d_binary_output_matrix.arr, d_binary_output_matrix.row, d_binary_output_matrix.col, d_weight_matrix.row, d_weight_matrix.col);
+			cudaEventRecord(stop2, 0);
+			cudaEventSynchronize(stop2);
+			cudaEventElapsedTime(&milliseconds, start2, stop2);
+			std::cout<<"Binary to integer conversion Time= "<< milliseconds<<std::endl;
 			cudaMemcpy(h_channel_outputs[i], d_binary_output_matrix.arr, sizeof(unsigned int) * d_binary_output_matrix.row * d_binary_output_matrix.col, cudaMemcpyDeviceToHost);
 			cudaFree(d_binary_output_matrix.arr);
+			cudaEventDestroy(start);
+			cudaEventDestroy(stop);
+			cudaEventDestroy(start1);
+			cudaEventDestroy(stop1);
+			cudaEventDestroy(start2);
+			cudaEventDestroy(stop2);
 		}
 		matrix2d<float> d_output_matrix;
 		d_output_matrix.col = h_output_tensor.col;
@@ -404,13 +422,13 @@ matrix3d<float> xnor_convolution_v1(matrix3d<float> &h_input_tensor, weight4d<fl
 
 int main()
 {
-	int row = 256;
-	int col = 256;
+	int row = 512;
+	int col = 512;
 	int kernel_row = 3;
 	int kernel_col = 3;
 
-	int channel_in = 8;
-	int channel_out = 8;
+	int channel_in = 64;
+	int channel_out = 1;
 	matrix3d<float> input_tensor;
 	weight4d<float> weight_tensor;
 	input_tensor.row = row;
@@ -457,11 +475,11 @@ int main()
 	}
 	delete[] input_tensor.arr;
 
-//	for (int i = 0; i < output_matrix.channel; i++)
-//	{
-//	    delete[] output_matrix.arr[i];
-//	}
-//	delete[] output_matrix.arr;
+	for (int i = 0; i < output_matrix.channel; i++)
+	{
+	    delete[] output_matrix.arr[i];
+	}
+	delete[] output_matrix.arr;
 
 	for (int i = 0; i < weight_tensor.channel_in * weight_tensor.channel_out; i++)
 	{

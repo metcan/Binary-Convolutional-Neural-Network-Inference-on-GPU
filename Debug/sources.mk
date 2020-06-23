@@ -25,5 +25,11 @@ C_DEPS :=
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
+xnor_gpu \
+xnor_gpu/Debug \
+xnor_gpu/Debug/.metadata/.plugins/org.eclipse.cdt.make.core \
+xnor_gpu/.metadata/.plugins/org.eclipse.cdt.make.core \
+xnor_cpu \
+network \
 . \
 

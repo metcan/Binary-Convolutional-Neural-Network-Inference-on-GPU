@@ -28,7 +28,8 @@
                 "${file}",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
-                "-fopenmp"
+                "-fopenmp",
+                "-O0"
             ],
             "options": {
                 "cwd": "/usr/bin"

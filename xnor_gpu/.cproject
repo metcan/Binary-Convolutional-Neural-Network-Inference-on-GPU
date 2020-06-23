@@ -43,11 +43,11 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
-					<fileInfo id="com.nvidia.cuda.ide.nine_zero.configuration.debug.1380515236.2007305623" name="gpu_deneme.cu" rcbsApplicability="disable" resourcePath="gpu_deneme.cu" toolsToInvoke="nvcc.compiler.base.562342409.1398890205">
-						<tool id="nvcc.compiler.base.562342409.1398890205" name="NVCC Compiler" superClass="nvcc.compiler.base.562342409"/>
+					<fileInfo id="com.nvidia.cuda.ide.nine_zero.configuration.debug.1380515236.1167757319" name="xnor_gpu_v2.cu" rcbsApplicability="disable" resourcePath="xnor_gpu_v2.cu" toolsToInvoke="nvcc.compiler.base.562342409.36556236">
+						<tool id="nvcc.compiler.base.562342409.36556236" name="NVCC Compiler" superClass="nvcc.compiler.base.562342409"/>
 					</fileInfo>
 					<sourceEntries>
-						<entry excluding="gpu_deneme.cu" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="xnor_gpu_v1.cu|gpu_deneme.cu" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

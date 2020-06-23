@@ -310,7 +310,7 @@ void __global__ binary2int(const  int *input_mat, float * output_mat,  int matri
 		unsigned int mask = 1;
 		unsigned int shifter = 0;
 		int buffer = 0;
-		int __restrict__ data = input_mat[idx];
+		int data = input_mat[idx];
 		for (int j=0; kernel_row>j; ++j)
 		{
 			for(int i=0; kernel_col>i; ++i)
