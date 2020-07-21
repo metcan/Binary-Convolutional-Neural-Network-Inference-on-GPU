@@ -12,9 +12,39 @@
 #include <assert.h>
 #include <math.h>
 
-#define NUM_STREAMS 16
+#define NUM_STREAMS 2
 
+struct GPUTimer
+{
+    GPUTimer() 
+    {
+        cudaEventCreate(&start_);
+        cudaEventCreate(&stop_);
+        cudaEventRecord(start_, 0);
+    }
 
+    ~GPUTimer() 
+    {
+        cudaEventDestroy(start_);
+        cudaEventDestroy(stop_);
+    }
+
+    void start() 
+    {
+        cudaEventRecord(start_, 0);
+    }
+
+    float seconds() 
+    {
+        cudaEventRecord(stop_, 0);
+        cudaEventSynchronize(stop_);
+        float time;
+        cudaEventElapsedTime(&time, start_, stop_);
+        return time * 1e-3;
+    }
+    private:
+    cudaEvent_t start_, stop_;
+};
 
 // This is second version of the gpu implementation
 // This version a general benchmarking to compare with CPU,
@@ -176,7 +206,44 @@ std::pair<int, int> BinaryMatMemoryAllocation( std::pair<int, int> input_size, s
 
 	return std::make_pair(size_x, size_y);
 }
+template <typename T>
+__global__ void compK_matrix(T* InputImageData, T kernel_value,
+    T* outputImageData, int channel_in, int width, int height) {
 
+    float accum;
+    int col = threadIdx.x + blockIdx.x * blockDim.x;   //col index
+    int row = threadIdx.y + blockIdx.y * blockDim.y;   //row index
+    int maskRowsRadius = maskRows / 2;
+    int maskColsRadius = maskCols / 2;
+
+
+    for (int k = 0; k < channel_in; k++) {      //cycle on kernel channels
+        if (row < height && col < width) {
+            accum = 0;
+            int startRow = row - maskRowsRadius;  //row index shifted by mask radius
+            int startCol = col - maskColsRadius;  //col index shifted by mask radius
+
+            for (int i = 0; i < maskRows; i++) { //cycle on mask rows
+
+                for (int j = 0; j < maskCols; j++) { //cycle on mask columns
+
+                    int currentRow = startRow + i; // row index to fetch data from input image
+                    int currentCol = startCol + j; // col index to fetch data from input image
+
+                    if (currentRow >= 0 && currentRow < height && currentCol >= 0 && currentCol < width) {
+
+                        accum += InputImageData[(currentRow * width + currentCol) * channel_in + k] *
+                            kernel_value;
+                    }
+                    else accum += 0;
+                }
+
+            }
+            outputImageData[(row * width + col) * channel_in + k] = accum;
+        }
+
+    }
+}
 
 void __global__ zeroPadding(float* input_tensor, float* output_tensor,  int kernel_row, int kernel_col, int input_col, int input_row, int output_col, int output_row, int output_channel)
 {
@@ -285,6 +352,25 @@ void __global__  convert2binary(
 		d_odata[idx] = local_register;
 	}
 }
+template<typename T>
+void __global__ scalar_multiplication(T* __restrict__ d_idata, const T __restrict__ scalar, const int height, const int width)
+{
+	int idx = threadIdx.x+blockDim.x*blockIdx.x;
+	if (idx<height * width)
+	{
+		d_idata[idx] = d_idata[idx] * scalar;
+	}
+}
+
+
+void __global__ scaling_result(T* __restrict__ d_idata, const T* __restrict__ d_scalar, const int height, const int width, const int channel_out)
+{
+	int idx = threadIdx.x+blockDim.x*blockIdx.x;
+	if (idx<height * width * channel_out)
+	{
+		d_idata[idx] = d_idata[idx] * d_scalar[idx%(height * width)];
+	}
+}
 
 void __device__ binary2int(const unsigned int  idata,  unsigned int &odata, int kernel_row, int kernel_col)
 {
@@ -362,7 +448,7 @@ void __global__ binaryConv2d(
 
 
 // This part must be updated to concurrent execution
-void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h_weight_tensor, matrix3d<float> &h_output_tensor, int kernel_row, int kernel_col, bool padding=true)
+void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h_weight_tensor, matrix3d<float> &h_output_tensor, const float alpha, int kernel_row, int kernel_col, bool padding=true)
 {
 
 	cudaEvent_t start, stop;
@@ -383,14 +469,32 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	auto copy_size = sizeof(float) * d_input_tensor.col* d_input_tensor.row * d_input_tensor.channel;
 	cudaMalloc((void **)&d_input_tensor.arr, copy_size);
 	cudaMemcpy(d_input_tensor.arr, h_input_tensor.arr, copy_size, cudaMemcpyHostToDevice);
+	//
+	// Calculate K matrix
+	// Use async steam2
+	cudaStream_t stream1;
+	cudaStreamCreate(&stream1);
+	matrix2d<float> d_K_matrix;
+	d_K_matrix.col = h_input_tensor.col;
+	d_K_matrix.row = h_input_tensor.row;
+	copy_size = sizeof(float) * d_K_matrix.col* d_K_matrix.row;
+	cudaMalloc((void **)&d_K_matrix.arr, copy_size);
+	const float kernel_value = 1.0 / static_cast<float>(h_weight_tensor.row * h_weight_tensor.col);
+	auto block_size = choose_block_size(h_input_tensor.row * h_input_tensor.col);
+	auto grid_size = (h_input_tensor.row * h_input_tensor.col+ block_size - 1)/block_size; 
+	compK_matrix<float><<<grid_size, block_size, stream1>>>(d_input_tensor.arr, kernel_value,
+		d_K_matrix.arr, d_input_tensor.channel, d_input_tensor.width, d_input_tensor.height);
+	//
+	scalar_multiplication<float><<<grid_size, block_size, stream1>>>(d_K_matrix.arr, alpha, height, width);
 	matrix3d<float> d_padded_input_tensor;
 	d_padded_input_tensor.row = h_input_tensor.row + kernel_row - 1;
 	d_padded_input_tensor.col = h_input_tensor.col + kernel_col - 1;
 	d_padded_input_tensor.channel = h_input_tensor.channel;
 	copy_size = sizeof(float) * d_padded_input_tensor.row * d_padded_input_tensor.col * d_padded_input_tensor.channel;
 	gpuErrchk(cudaMalloc((void **)&d_padded_input_tensor.arr, copy_size));
-	auto block_size = choose_block_size(d_padded_input_tensor.row * d_padded_input_tensor.col * d_padded_input_tensor.channel);
-	auto grid_size = (d_padded_input_tensor.row * d_padded_input_tensor.col * d_padded_input_tensor.channel + block_size - 1)/block_size;
+
+	block_size = choose_block_size(d_padded_input_tensor.row * d_padded_input_tensor.col * d_padded_input_tensor.channel);
+	grid_size = (d_padded_input_tensor.row * d_padded_input_tensor.col * d_padded_input_tensor.channel + block_size - 1)/block_size;
 	zeroPadding<<<grid_size, block_size>>>(d_input_tensor.arr, d_padded_input_tensor.arr,  kernel_row, kernel_col, d_input_tensor.col, d_input_tensor.row, d_padded_input_tensor.row, d_padded_input_tensor.col, d_padded_input_tensor.channel);
 	//cudaFree(d_input_tensor.arr);
 	auto binary_size = find_binary_size(std::make_pair(h_input_tensor.col, h_input_tensor.row), std::make_pair(kernel_col, kernel_row));
@@ -400,6 +504,7 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	d_binary_input_tensor.col = binary_size.first;
 	d_binary_input_tensor.channel = d_padded_input_tensor.channel;
 	copy_size = sizeof(unsigned int) * d_binary_input_tensor.row * d_binary_input_tensor.col * d_binary_input_tensor.channel;
+
 	gpuErrchk(cudaMalloc((void **)&d_binary_input_tensor.arr, copy_size));
 	cudaEventRecord(start, 0);
 	convert2binary<<<grid_size, block_size>>>(d_padded_input_tensor.arr, d_binary_input_tensor.arr,
@@ -456,6 +561,10 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	cudaEventSynchronize(stop2);
 	cudaEventElapsedTime(&milliseconds, start2, stop2);
 	std::cout<<"Summation Time= "<< milliseconds<<std::endl;
+	cudaDeviceSynchronize()
+	cudaStreamDestroy(stream1);
+	// Multiplication with K and alpha
+	//scaling_result<<<>>>();
 	//cudaFree(d_convolution_buffer.arr);
 	cudaMemcpy(h_output_tensor.arr, d_output_tensor.arr, copy_size, cudaMemcpyDeviceToHost);
 	//cudaFree(d_output_tensor.arr);

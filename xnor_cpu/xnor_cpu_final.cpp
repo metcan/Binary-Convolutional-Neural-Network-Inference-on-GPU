@@ -680,8 +680,13 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 	return output_tensor;
 }
 int main()
+// add variable test range like 128, 256, 512, 1024
+// add const variable size 512 with kernel size 1, 3
 {
-	Tensor<float> input_tensor(512, 512, 1);
+	int channel_in = 4;
+	int width = 128 / channel_in; 
+	int height = 128 / channel_in;
+	Tensor<float> input_tensor(width, height, 1);
 	Weight<float> weight(3, 3, input_tensor.channel, 1);
 	std::vector<float> scalar(weight.channel_out);
 	std::pair<int, int> kernel_size(weight.row, weight.col);

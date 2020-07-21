@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<session version="2" name="deneme" hscale="1.0E-6" normalize="false">
+<timelineoptions enabletimerange="false" start="-1" end="-1" numsegmentsuvm="100" uvmisegmentenabled="true"/>
+<expert></expert>
+<analysis guided="false"></analysis>
+<expertsystem current="INTRO"><visited><stage name="INTRO"/></visited></expertsystem>
+<vruler width="200"/>
+<hruler>
+</hruler>
+</session>

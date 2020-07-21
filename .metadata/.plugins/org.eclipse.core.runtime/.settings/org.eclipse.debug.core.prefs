@@ -1,0 +1,6 @@
+//org.eclipse.debug.core.PREFERRED_DELEGATES/org.eclipse.cdt.launch.applicationLaunchType=com.nvidia.cuda.ide.debug.launchApplicationDelegate,debug,;com.nvidia.cuda.ide.debug.launchApplicationDelegate,run,;
+//org.eclipse.debug.core.PREFERRED_DELEGATES/org.eclipse.cdt.launch.attachLaunchType=com.nvidia.cuda.ide.debug.launch.attachCLaunch,debug,;
+//org.eclipse.debug.core.PREFERRED_DELEGATES/org.eclipse.cdt.launch.postmortemLaunchType=com.nvidia.cuda.ide.debug.coreCLaunch,debug,;
+//org.eclipse.debug.core.PREFERRED_DELEGATES/org.eclipse.cdt.launch.remoteApplicationLaunchType=com.nvidia.cuda.ide.remote.cudagdbserverrun,debug,;com.nvidia.cuda.ide.remote.cudagdbserverrun,run,;
+eclipse.preferences.version=1
+prefWatchExpressions=<?xml version\="1.0" encoding\="UTF-8" standalone\="no"?>\n<watchExpressions/>\n
