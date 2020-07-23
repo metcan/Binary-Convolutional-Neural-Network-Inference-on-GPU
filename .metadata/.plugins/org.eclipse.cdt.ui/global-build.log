@@ -1216,3 +1216,259 @@ Invoking: NVCC Linker
 /usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./compK_final.o   
 Finished building target: deneme
  
+20:05:34 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./compK_final.o  ./compK_final.d  deneme
+ 
+20:05:34 **** Build of configuration Debug for project deneme ****
+make all 
+Building file: ../compK_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "compK_final.d" "../compK_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "compK_final.o" "../compK_final.cu"
+../compK_final.cu(210): warning: variable "elapsedTimeAddition" is used before its value is set
+
+../compK_final.cu(178): warning: variable "hostMaskData" was set but never used
+
+../compK_final.cu(126): warning: variable "gridSize" was declared but never referenced
+
+../compK_final.cu(210): warning: variable "elapsedTimeAddition" is used before its value is set
+
+Finished building: ../compK_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./compK_final.o   
+Finished building target: deneme
+ 
+20:25:11 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+20:25:38 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./compK_final.o  ./compK_final.d  deneme
+ 
+20:25:39 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_final.d" "../xnor_gpu_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_final.o" "../xnor_gpu_final.cu"
+Finished building: ../xnor_gpu_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_final.o   
+Finished building target: deneme
+ 
+20:26:40 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_final.d" "../xnor_gpu_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_final.o" "../xnor_gpu_final.cu"
+Finished building: ../xnor_gpu_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_final.o   
+Finished building target: deneme
+ 
+20:27:05 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+20:28:42 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_final.d" "../xnor_gpu_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_final.o" "../xnor_gpu_final.cu"
+Finished building: ../xnor_gpu_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_final.o   
+Finished building target: deneme
+ 
+20:32:00 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_final.d" "../xnor_gpu_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_final.o" "../xnor_gpu_final.cu"
+Finished building: ../xnor_gpu_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_final.o   
+Finished building target: deneme
+ 
+20:32:28 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_final.d" "../xnor_gpu_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_final.o" "../xnor_gpu_final.cu"
+Finished building: ../xnor_gpu_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_final.o   
+Finished building target: deneme
+ 
+20:34:13 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_final.d" "../xnor_gpu_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_final.o" "../xnor_gpu_final.cu"
+Finished building: ../xnor_gpu_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_final.o   
+Finished building target: deneme
+ 
+20:34:34 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+20:36:06 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./xnor_gpu_final.o  ./xnor_gpu_final.d  deneme
+ 
+20:36:06 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_v1.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_v1.d" "../xnor_gpu_v1.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_v1.o" "../xnor_gpu_v1.cu"
+Finished building: ../xnor_gpu_v1.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_v1.o   
+Finished building target: deneme
+ 
+20:43:46 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_v1.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_v1.d" "../xnor_gpu_v1.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_v1.o" "../xnor_gpu_v1.cu"
+Finished building: ../xnor_gpu_v1.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_v1.o   
+Finished building target: deneme
+ 
+20:44:23 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_v1.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_v1.d" "../xnor_gpu_v1.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_v1.o" "../xnor_gpu_v1.cu"
+Finished building: ../xnor_gpu_v1.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_v1.o   
+Finished building target: deneme
+ 
+21:06:51 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./xnor_gpu_v1.o  ./xnor_gpu_v1.d  deneme
+ 
+21:06:52 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_v1.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_v1.d" "../xnor_gpu_v1.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_v1.o" "../xnor_gpu_v1.cu"
+Finished building: ../xnor_gpu_v1.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_v1.o   
+Finished building target: deneme
+ 
+21:09:34 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./xnor_gpu_v1.o  ./xnor_gpu_v1.d  deneme
+ 
+21:09:34 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../compK_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "compK_final.d" "../compK_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "compK_final.o" "../compK_final.cu"
+../compK_final.cu(179): warning: variable "elapsedTimeAddition" was declared but never referenced
+
+../compK_final.cu(184): warning: variable "hostMaskData" was set but never used
+
+../compK_final.cu(215): error: identifier "total_time" is undefined
+
+../compK_final.cu(147): error: identifier "total_time" is undefined
+
+../compK_final.cu(126): warning: variable "gridSize" was declared but never referenced
+
+2 errors detected in the compilation of "/tmp/tmpxft_00001680_00000000-6_compK_final.cpp1.ii".
+subdir.mk:18: recipe for target 'compK_final.o' failed
+make: *** [compK_final.o] Error 1
+21:09:53 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../compK_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "compK_final.d" "../compK_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "compK_final.o" "../compK_final.cu"
+../compK_final.cu(179): warning: variable "elapsedTimeAddition" was declared but never referenced
+
+../compK_final.cu(184): warning: variable "hostMaskData" was set but never used
+
+../compK_final.cu(126): warning: variable "gridSize" was declared but never referenced
+
+Finished building: ../compK_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./compK_final.o   
+Finished building target: deneme
+ 
+21:10:15 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../compK_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "compK_final.d" "../compK_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "compK_final.o" "../compK_final.cu"
+../compK_final.cu(172): warning: variable "elapsedTimeAddition" was declared but never referenced
+
+../compK_final.cu(177): warning: variable "hostMaskData" was set but never used
+
+../compK_final.cu(126): warning: variable "gridSize" was declared but never referenced
+
+Finished building: ../compK_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./compK_final.o   
+Finished building target: deneme
+ 
+21:10:41 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../compK_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "compK_final.d" "../compK_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "compK_final.o" "../compK_final.cu"
+../compK_final.cu(172): warning: variable "elapsedTimeAddition" was declared but never referenced
+
+../compK_final.cu(177): warning: variable "hostMaskData" was set but never used
+
+../compK_final.cu(126): warning: variable "gridSize" was declared but never referenced
+
+Finished building: ../compK_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./compK_final.o   
+Finished building target: deneme
+ 

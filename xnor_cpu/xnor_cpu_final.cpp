@@ -12,7 +12,7 @@
 // Indexs are defined with x,y coordinate pairs 
 constexpr std::pair<int, int> register_size(8, 8);
 
-
+static double total_time = 0;
 
 
 // Custom Matrix class using standard vector.
@@ -590,7 +590,7 @@ void xnor_convoltion_op(Matrix<T> input_matrix, Matrix<T> &output_matrix, Matrix
 	intMat2BinaryMat<T>(input_matrix, binary_input_matrix, kernel_size);
 	auto stop = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> multi_core(stop - start);
-	std::cout<<"int2binary Performance : "<<multi_core.count()<<std::endl;
+	//std::cout<<"int2binary Performance : "<<multi_core.count()<<std::endl;
 	}
 	
 	intMat2BinaryMat<T>(weight_matrix, binary_weight_matrix, kernel_size);
@@ -602,14 +602,19 @@ void xnor_convoltion_op(Matrix<T> input_matrix, Matrix<T> &output_matrix, Matrix
 	auto stop = std::chrono::high_resolution_clock::now();
 
 	std::chrono::duration<double, std::milli> multi_core(stop - start);
-	std::cout<<"Xnor Convolution Kernel Performance : "<<multi_core.count()<<std::endl;
+	#pragma omp critical
+	{
+		total_time += multi_core.count();
+	}
+
+	//std::cout<<"Xnor Convolution Kernel Performance : "<<multi_core.count()<<std::endl;
 	}
 	{
 	auto start = std::chrono::high_resolution_clock::now();
 	binaryMat2IntMat(output_mat, hash_map);
 	auto stop = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> multi_core(stop - start);
-	std::cout<<"Binary2int Performance : "<<multi_core.count()<<std::endl;
+	//std::cout<<"Binary2int Performance : "<<multi_core.count()<<std::endl;
 	}
 	MatTypeCasting<unsigned long, T>(output_mat, output_matrix);
 }
@@ -646,9 +651,12 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 		int in, out;
 		Weight<T> output_tensor_buffer(output_tensor.row, output_tensor.col, weight.channel_in, weight.channel_out);
 		auto start = std::chrono::high_resolution_clock::now();
+		omp_lock_t writelock;
+
+		omp_init_lock(&writelock);
 		#pragma omp parallel private(in, out) shared(input_tensor, output_tensor_buffer, hash_map)
- 		{
-			#pragma omp for schedule(dynamic,50)// collapse(2)
+ 		{	
+			#pragma omp for schedule(dynamic,50) collapse(2)
 			for(int out=0; weight.channel_out>out; out++)
 			{
 				
@@ -662,9 +670,10 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 				// output_tensor[out] *= alpha[out];
 			}
 		}
+		omp_destroy_lock(&writelock);
 		auto stop = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double, std::milli> multi_core(stop - start);
-		std::cout<<"Multicore xnor Kernel Performance : "<<multi_core.count()<<std::endl;
+		//std::cout<<"Multicore xnor Kernel Performance : "<<multi_core.count()<<std::endl;
 		#pragma omp parallel private(out) shared(output_tensor_buffer, output_tensor, K, alpha)
 		{
 		#pragma omp for schedule(dynamic,50) collapse(1)
@@ -682,65 +691,79 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 int main()
 // add variable test range like 128, 256, 512, 1024
 // add const variable size 512 with kernel size 1, 3
-{
-	int channel_in = 4;
-	int width = 128 / channel_in; 
-	int height = 128 / channel_in;
-	Tensor<float> input_tensor(width, height, 1);
-	Weight<float> weight(3, 3, input_tensor.channel, 1);
-	std::vector<float> scalar(weight.channel_out);
-	std::pair<int, int> kernel_size(weight.row, weight.col);
-	// Random initilizate the values
-	for(int k=0; input_tensor.channel>k; k++)
+{	
+	int row[] = {128, 256, 512, 1024, 2048};
+    int col[] = {128, 256, 512, 1024, 2048};
+    int kernel = 3;
+    int channel_in = 1;
+    int channel_out = 1;
+    int total_test_count = 100;
+	for(int index = 0; index<5; ++index)
 	{
-		for(int j=0; input_tensor.col>j; j++)
-		{
-			for(int i=0; input_tensor.row>i; i++)
-			{
-				input_tensor[k][j][i] = (std::rand()%1000 - 500);
-				if (input_tensor[k][j][i] >= 0)
-				{
-					input_tensor[k][j][i] = 1;
-				}
-				else
-				{
-					input_tensor[k][j][i] = -1;
-				}
-				
-			}
-		}
-	}
-	for (int m=0; weight.channel_out>m; m++)
+	for(int iter = 0; iter<total_test_count; ++iter)
 	{
-		scalar[m] = static_cast<float>(rand()) / static_cast<float> (RAND_MAX);
-		for(int k=0; weight.channel_in>k; k++)
+		int width = row[index]; 
+		int height = col[index];
+		Tensor<float> input_tensor(width, height, 1);
+		Weight<float> weight(3, 3, input_tensor.channel, 1);
+		std::vector<float> scalar(weight.channel_out);
+		std::pair<int, int> kernel_size(weight.row, weight.col);
+		// Random initilizate the values
+		for(int k=0; input_tensor.channel>k; k++)
 		{
-			
-			for(int j=0; weight.col>j; j++)
+			for(int j=0; input_tensor.col>j; j++)
 			{
-				for(int i=0; weight.row>i; i++)
+				for(int i=0; input_tensor.row>i; i++)
 				{
-					weight[m][k][j][i] = (std::rand()%1000 - 500);
-					if (weight[m][k][j][i] >= 0)
+					input_tensor[k][j][i] = (std::rand()%1000 - 500);
+					if (input_tensor[k][j][i] >= 0)
 					{
-						weight[m][k][j][i] = 1;
+						input_tensor[k][j][i] = 1;
 					}
 					else
 					{
-						weight[m][k][j][i] = -1;
+						input_tensor[k][j][i] = -1;
 					}
 					
 				}
 			}
 		}
+		for (int m=0; weight.channel_out>m; m++)
+		{
+			scalar[m] = static_cast<float>(rand()) / static_cast<float> (RAND_MAX);
+			for(int k=0; weight.channel_in>k; k++)
+			{
+				
+				for(int j=0; weight.col>j; j++)
+				{
+					for(int i=0; weight.row>i; i++)
+					{
+						weight[m][k][j][i] = (std::rand()%1000 - 500);
+						if (weight[m][k][j][i] >= 0)
+						{
+							weight[m][k][j][i] = 1;
+						}
+						else
+						{
+							weight[m][k][j][i] = -1;
+						}
+						
+					}
+				}
+			}
+		}
+		// Calculate hash map
+		auto hash_map = generate_hash_map(kernel_size);
+		auto start = std::chrono::high_resolution_clock::now();
+		auto output_tensor = xnor_convoltion<float>(input_tensor, weight, scalar, hash_map);
+		auto stop = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double, std::milli> multi_core(stop - start);
+		//std::cout<<"Multi core Xnor Performance : "<<multi_core.count()<<std::endl;
+
 	}
-	// Calculate hash map
-	auto hash_map = generate_hash_map(kernel_size);
-	auto start = std::chrono::high_resolution_clock::now();
-	auto output_tensor = xnor_convoltion<float>(input_tensor, weight, scalar, hash_map);
-    auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> multi_core(stop - start);
-	std::cout<<"Multi core Xnor Performance : "<<multi_core.count()<<std::endl;
+	std::cout << "Total time: " << total_time / static_cast<double>(total_test_count) << " For Image Size "<< row[index] << std::endl;
+	total_time = 0;
+	}
 	return 0;
-}
+	}
 

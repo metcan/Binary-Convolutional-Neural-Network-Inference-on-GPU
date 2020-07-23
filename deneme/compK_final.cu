@@ -18,7 +18,7 @@
 #define w (TILE_WIDTH + maskCols -1)
 
 typedef float type;
-
+static float total_time = 0;
 
 
 // chose convolution kernel type
@@ -144,27 +144,26 @@ T* VanillaConv2d(T* deviceInputImageData, int imageHeight, int imageWidth, float
     cudaEventSynchronize(stop1);
 
     cudaEventElapsedTime(&elapsed_time_convolution, start1, stop1);
-
+    total_time += elapsed_time_convolution;
 
     cudaEventDestroy(start1);
     cudaEventDestroy(stop1);
 
 
-    if (debug == true) {
-        std::cout << "-------------------------------------" << std::endl;
-        std::cout << "Convolution Results" << std::endl;
-        std::cout << "-------------------------------------" << std::endl;
-        //print<T>(deviceConvOutputImageData, imageHeight, imageWidth);
-        std::cout << "-------------------------------------" << std::endl;
-    }
     return deviceConvOutputImageData;
 }
 
 
 int main() {
-
-    int imageHeight = IM_HEIGHT;
-    int imageWidth = IM_WIDTH;
+    int row_arr[] = {128, 256, 512, 1024, 2048};
+    int col_arr[] = {128, 256, 512, 1024, 2048};
+    int total_test_count = 100;
+	for (int index =0; index< 5; ++index)
+	{
+		for (int iter = 0; iter<total_test_count; ++iter)
+		{
+			int imageHeight = row_arr[index];
+			int imageWidth = col_arr[index];
 
     type* hostInputImageData;
     type* deviceInputImageData;
@@ -186,8 +185,6 @@ int main() {
     }
 
 
-    std::cout << "\n" << std::endl;
-
     cudaMalloc((void**)&deviceInputImageData, imageWidth * imageHeight * sizeof(type));
 
     cudaMemcpy(deviceInputImageData, hostInputImageData,
@@ -197,19 +194,6 @@ int main() {
 
     deviceOutputImageData = VanillaConv2d<type>(deviceInputImageData, imageHeight, imageWidth, elapsedTimeConvolution);
 
-    
-    
-
-    std::cout << "-------------------------------------" << std::endl;
-    std::cout << "Timing Results" << std::endl;
-    std::cout << "-------------------------------------" << std::endl;
-    std::cout << "image dimensions (h x w):" << std::endl;
-    std::cout << imageWidth << "x" << imageHeight << std::endl;
-    std::cout << "-------------------------------------" << std::endl;
-    
-    std::cout << "elapsed time for addition: " << elapsedTimeAddition << " ms" << std::endl;
-    std::cout << "elapsed time for convolution: " << elapsedTimeConvolution << " ms" << std::endl;
-    std::cout << "-------------------------------------" << std::endl;
     cudaMemset(deviceInputImageData, 0, imageWidth * imageHeight *
         sizeof(type));
     cudaMemset(deviceOutputImageData, 0, imageWidth * imageHeight *
@@ -218,7 +202,12 @@ int main() {
     free(hostInputImageData);
     cudaFree(deviceInputImageData);
     cudaFree(deviceOutputImageData);
-
+	}
+	total_time = total_time / static_cast<float>(total_test_count);
+	std::cout<< "Averaged Time "<<total_time << "  For Row size:"<< row_arr[index] << std::endl;
+	total_time = 0;
+	}
+	return 0;
 }
 
 

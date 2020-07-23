@@ -14,6 +14,8 @@
 
 #define NUM_STREAMS 2
 
+static float total_time = 0;
+
 struct GPUTimer
 {
     GPUTimer() 
@@ -496,7 +498,7 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	block_size = choose_block_size(d_padded_input_tensor.row * d_padded_input_tensor.col * d_padded_input_tensor.channel);
 	grid_size = (d_padded_input_tensor.row * d_padded_input_tensor.col * d_padded_input_tensor.channel + block_size - 1)/block_size;
 	zeroPadding<<<grid_size, block_size>>>(d_input_tensor.arr, d_padded_input_tensor.arr,  kernel_row, kernel_col, d_input_tensor.col, d_input_tensor.row, d_padded_input_tensor.row, d_padded_input_tensor.col, d_padded_input_tensor.channel);
-	//cudaFree(d_input_tensor.arr);
+	cudaFree(d_input_tensor.arr);
 	auto binary_size = find_binary_size(std::make_pair(h_input_tensor.col, h_input_tensor.row), std::make_pair(kernel_col, kernel_row));
 
 	matrix3d<unsigned int> d_binary_input_tensor;
@@ -516,8 +518,8 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	cudaEventSynchronize(stop);
 	float milliseconds = 0;
 	cudaEventElapsedTime(&milliseconds, start, stop);
-	std::cout<<"Int2Binary Time= "<< milliseconds<<std::endl;
-	//cudaFree(d_padded_input_tensor.arr);
+	//std::cout<<"Int2Binary Time= "<< milliseconds<<std::endl;
+	cudaFree(d_padded_input_tensor.arr);
 	matrix4d<unsigned int> d_convolution_buffer;
 	d_convolution_buffer.col = h_input_tensor.col;
 	d_convolution_buffer.row = h_input_tensor.row;
@@ -545,7 +547,8 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	cudaEventRecord(stop1, 0);
 	cudaEventSynchronize(stop1);
 	cudaEventElapsedTime(&milliseconds, start1, stop1);
-	std::cout<<"Convolution Time= "<< milliseconds<<std::endl;
+	total_time = total_time + milliseconds;
+	//std::cout<<"Convolution Time= "<< milliseconds<<std::endl;
 	cudaFree(d_binary_input_tensor.arr);
 	matrix3d<float> d_output_tensor;
 	d_output_tensor.col = h_output_tensor.col;
@@ -560,14 +563,16 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	cudaEventRecord(stop2, 0);
 	cudaEventSynchronize(stop2);
 	cudaEventElapsedTime(&milliseconds, start2, stop2);
-	std::cout<<"Summation Time= "<< milliseconds<<std::endl;
+	//std::cout<<"Summation Time= "<< milliseconds<<std::endl;
 	cudaDeviceSynchronize();
 	cudaStreamDestroy(stream1);
 	// Multiplication with K and alpha
 	//scaling_result<<<>>>();
-	//cudaFree(d_convolution_buffer.arr);
+	cudaFree(d_convolution_buffer.arr);
 	cudaMemcpy(h_output_tensor.arr, d_output_tensor.arr, copy_size, cudaMemcpyDeviceToHost);
-	//cudaFree(d_output_tensor.arr);
+	cudaFree(d_output_tensor.arr);
+	cudaFree(d_K_matrix.arr);
+	cudaFree(d_weight_tensor.arr);
 	cudaEventDestroy(start);
 	cudaEventDestroy(stop);
 	cudaEventDestroy(start1);
@@ -583,70 +588,83 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 
 int main()
 {
-	int row = 512;
-	int col = 512;
-	int kernel_row = 3;
-	int kernel_col = 3;
-
-	int channel_in = 1;
-	int channel_out = 1;
-	matrix3d<float> input_tensor;
-	matrix4d<float> weight_tensor;
-	input_tensor.row = row;
-	input_tensor.col = col;
-	input_tensor.channel = channel_in;
-	// Init Matrices
-	input_tensor.arr = new float [input_tensor.channel * input_tensor.row * input_tensor.col];
-	weight_tensor.row = kernel_row;
-	weight_tensor.col = kernel_col;
-	weight_tensor.channel_in = channel_in;
-	weight_tensor.channel_out = channel_out;
-	weight_tensor.arr = new float [weight_tensor.channel_in * weight_tensor.channel_out * weight_tensor.row * weight_tensor.col];
-
-	bool padding = true;
-	// Default Values
-	for(int i=0; input_tensor.channel > i; ++i)
+    int row_arr[] = {128, 256, 512, 1024, 2048};
+    int col_arr[] = {128, 256, 512, 1024, 2048};
+    int total_test_count = 100;
+	for (int index =0; index< 5; ++index)
 	{
-		for (int j=0; input_tensor.col * input_tensor.row> j; ++j)
+		for (int iter = 0; iter<total_test_count; ++iter)
 		{
-			input_tensor.arr[i * input_tensor.col * input_tensor.row + j] = (rand() % 50) - 25;
-		}
-	}
-	for(int i=0; weight_tensor.channel_in * weight_tensor.channel_out > i; ++i)
-	{
-		for (int j=0; weight_tensor.col * weight_tensor.row> j; ++j)
-		{
-			weight_tensor.arr[i * weight_tensor.col * weight_tensor.row + j] = (rand() % 50) -25;
-		}
-	}
-	// Make Weights binary as preProcessing
-	auto weight_size = BinaryMatMemoryAllocation(std::make_pair(weight_tensor.row, weight_tensor.col), std::make_pair(weight_tensor.col, weight_tensor.row));
-	matrix4d<unsigned int> binary_weight_tensor;
-	binary_weight_tensor.col = weight_size.first;
-	binary_weight_tensor.row = weight_size.second;
-	binary_weight_tensor.channel_in = weight_tensor.channel_in;
-	binary_weight_tensor.channel_out = weight_tensor.channel_out;
-	binary_weight_tensor.arr = new unsigned int [binary_weight_tensor.channel_in * binary_weight_tensor.channel_out *binary_weight_tensor.row * binary_weight_tensor.col];
-	for (int i= 0; weight_tensor.channel_out > i; ++i)
-	{
-		for(int j=0; weight_tensor.channel_in > j; ++j)
-		{
-			intMat2BinaryMat(&weight_tensor.arr[(i * weight_tensor.channel_in + j) * weight_tensor.row * weight_tensor.col], &binary_weight_tensor.arr[i * weight_tensor.channel_in + j],
-					std::make_pair(weight_tensor.col, weight_tensor.row), weight_tensor.row, weight_tensor.col, binary_weight_tensor.col, binary_weight_tensor.row);
-		}
-	}
-	delete weight_tensor.arr;
-	// A sample layer
-	matrix3d<float> output_tensor;
-	output_tensor.col = input_tensor.col;
-	output_tensor.row = input_tensor.row;
-	output_tensor.channel = input_tensor.channel;
-	output_tensor.arr = new float [input_tensor.col* input_tensor.row * input_tensor.channel];
-	xnor_convolution(input_tensor, binary_weight_tensor, output_tensor, weight_tensor.row, weight_tensor.col ,padding);
+			int row = row_arr[index];
+			int col = col_arr[index];
+			int kernel_row = 3;
+			int kernel_col = 3;
 
-	delete[] input_tensor.arr;
-	delete[] binary_weight_tensor.arr;
-	delete[] output_tensor.arr;
+			int channel_in = 1;
+			int channel_out = 1;
+			matrix3d<float> input_tensor;
+			matrix4d<float> weight_tensor;
+			input_tensor.row = row;
+			input_tensor.col = col;
+			input_tensor.channel = channel_in;
+			// Init Matrices
+			input_tensor.arr = new float [input_tensor.channel * input_tensor.row * input_tensor.col];
+			weight_tensor.row = kernel_row;
+			weight_tensor.col = kernel_col;
+			weight_tensor.channel_in = channel_in;
+			weight_tensor.channel_out = channel_out;
+			weight_tensor.arr = new float [weight_tensor.channel_in * weight_tensor.channel_out * weight_tensor.row * weight_tensor.col];
+
+			bool padding = true;
+			// Default Values
+			for(int i=0; input_tensor.channel > i; ++i)
+			{
+				for (int j=0; input_tensor.col * input_tensor.row> j; ++j)
+				{
+					input_tensor.arr[i * input_tensor.col * input_tensor.row + j] = (rand() % 50) - 25;
+				}
+			}
+			for(int i=0; weight_tensor.channel_in * weight_tensor.channel_out > i; ++i)
+			{
+				for (int j=0; weight_tensor.col * weight_tensor.row> j; ++j)
+				{
+					weight_tensor.arr[i * weight_tensor.col * weight_tensor.row + j] = (rand() % 50) -25;
+				}
+			}
+			// Make Weights binary as preProcessing
+			auto weight_size = BinaryMatMemoryAllocation(std::make_pair(weight_tensor.row, weight_tensor.col), std::make_pair(weight_tensor.col, weight_tensor.row));
+			matrix4d<unsigned int> binary_weight_tensor;
+			binary_weight_tensor.col = weight_size.first;
+			binary_weight_tensor.row = weight_size.second;
+			binary_weight_tensor.channel_in = weight_tensor.channel_in;
+			binary_weight_tensor.channel_out = weight_tensor.channel_out;
+			binary_weight_tensor.arr = new unsigned int [binary_weight_tensor.channel_in * binary_weight_tensor.channel_out *binary_weight_tensor.row * binary_weight_tensor.col];
+			for (int i= 0; weight_tensor.channel_out > i; ++i)
+			{
+				for(int j=0; weight_tensor.channel_in > j; ++j)
+				{
+					intMat2BinaryMat(&weight_tensor.arr[(i * weight_tensor.channel_in + j) * weight_tensor.row * weight_tensor.col], &binary_weight_tensor.arr[i * weight_tensor.channel_in + j],
+							std::make_pair(weight_tensor.col, weight_tensor.row), weight_tensor.row, weight_tensor.col, binary_weight_tensor.col, binary_weight_tensor.row);
+				}
+			}
+			delete weight_tensor.arr;
+			// A sample layer
+			matrix3d<float> output_tensor;
+			output_tensor.col = input_tensor.col;
+			output_tensor.row = input_tensor.row;
+			output_tensor.channel = input_tensor.channel;
+			output_tensor.arr = new float [input_tensor.col* input_tensor.row * input_tensor.channel];
+			xnor_convolution(input_tensor, binary_weight_tensor, output_tensor, weight_tensor.row, weight_tensor.col ,padding);
+
+			delete[] input_tensor.arr;
+			delete[] binary_weight_tensor.arr;
+			delete[] output_tensor.arr;
+
+		}
+        total_time = total_time / static_cast<double>(total_test_count);
+        std::cout<< "Averaged Time "<<total_time << "  For Row size:"<< row_arr[index] << std::endl;
+        total_time = 0;
+	}
 	return 0;
 }
 

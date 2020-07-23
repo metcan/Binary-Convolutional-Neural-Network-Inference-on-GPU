@@ -1,16 +1,14 @@
-08:12:55 **** Incremental Build of configuration Debug for project deneme ****
+21:10:41 **** Incremental Build of configuration Debug for project deneme ****
 make all 
 Building file: ../compK_final.cu
 Invoking: NVCC Compiler
 /usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "compK_final.d" "../compK_final.cu"
 /usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "compK_final.o" "../compK_final.cu"
-../compK_final.cu(210): warning: variable "elapsedTimeAddition" is used before its value is set
+../compK_final.cu(172): warning: variable "elapsedTimeAddition" was declared but never referenced
 
-../compK_final.cu(178): warning: variable "hostMaskData" was set but never used
+../compK_final.cu(177): warning: variable "hostMaskData" was set but never used
 
 ../compK_final.cu(126): warning: variable "gridSize" was declared but never referenced
-
-../compK_final.cu(210): warning: variable "elapsedTimeAddition" is used before its value is set
 
 Finished building: ../compK_final.cu
  
@@ -20,5 +18,5 @@ Invoking: NVCC Linker
 Finished building target: deneme
  
 
-08:12:57 Build Finished (took 1s.713ms)
+21:10:43 Build Finished (took 1s.612ms)
 

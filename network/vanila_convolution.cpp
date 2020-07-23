@@ -27,6 +27,7 @@ std::pair<int, int> get_matrix_shape(matrix_2d<T> matrix){
     return std::make_pair(height,width);
 }
 
+static double total_time = 0; 
 
 template<typename T>
 void zero_padding_2D(matrix_2d<T> &input_mat, matrix_2d<T> &output_mat, std::pair<int, int> input_size, std::pair<int, int> kernel_size)
@@ -116,7 +117,8 @@ matrix_2d<T> conv_op(matrix_2d<T> input_matrix, matrix_2d<T> kernel_matrix)
     }
     auto stop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> multi_core(stop - start);
-    std::cout<<"Time spend for Convolution :"<< multi_core.count()<< std::endl;
+    //std::cout<<"Time spend for Convolution :"<< multi_core.count()<< std::endl;
+    total_time += static_cast<double>(multi_core.count());
     return output_matrix;
     
 }
@@ -156,11 +158,18 @@ int main()
     int kernel = 3;
     int channel_in = 1;
     int channel_out = 1;
+    int total_test_count = 100;
     for(int i=0; i<5; ++i)
     {
-        std::cout << "Row size"<< row[i] << std::endl;
+        for (int j=0; j<total_test_count; ++j)
+        {
+        //std::cout << "Row size"<< row[i] << std::endl;
         matrix_3d<double> input_matrix(channel_in, matrix_2d<double>(row[i], std::vector<double>(col[i], 0) ) );
         matrix_4d<double> weight_matrix(channel_out, matrix_3d<double>(channel_in, std::vector<std::vector<double>>(kernel, std::vector<double>(kernel, 0) ) ) ) ;
         auto output = conv2D<double>(input_matrix, weight_matrix, row[i], col[i]);
+        }
+        total_time = total_time / static_cast<double>(total_test_count);
+        std::cout<< "Averaged Time "<<total_time << "  For Row size:"<< row[i] << std::endl;
+        total_time = 0;
     }
 }
