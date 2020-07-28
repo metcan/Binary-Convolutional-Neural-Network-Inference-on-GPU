@@ -517,13 +517,13 @@ void conv2D(Matrix<T> &input_x,  Matrix<T> &output_y, std::pair<int, int>kernel_
 	}
 }
 
-void binaryMat2IntMat(Matrix<unsigned long> &input_x, const std::unordered_map<unsigned long, int> &hash_map)
+void binaryMat2IntMat(Matrix<unsigned long> &input_x)
 {
 	for(int j=0; input_x.size()>j; j++)
 	{
 		for (int i=0; input_x[j].size()>i; i++)
 		{
-			input_x[j][i] = hash_map.at(input_x[j][i]);
+			input_x[j][i] = __builtin_popcountll(input_x[j][i]);
 		}
 	}
 }
@@ -572,7 +572,7 @@ void MatTypeCasting(Matrix<in>& input_mat, Matrix<out>& output_mat)
 
 template<typename T>
 void xnor_convoltion_op(Matrix<T> input_matrix, Matrix<T> &output_matrix, Matrix<float> &weight_matrix,
- std::unordered_map<unsigned long, int> hash_map, bool padding = true)
+  bool padding = true)
 {
 	auto kernel_size = std::make_pair(weight_matrix.col, weight_matrix.row);
 	if (padding == true)
@@ -590,6 +590,8 @@ void xnor_convoltion_op(Matrix<T> input_matrix, Matrix<T> &output_matrix, Matrix
 	intMat2BinaryMat<T>(input_matrix, binary_input_matrix, kernel_size);
 	auto stop = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> multi_core(stop - start);
+
+	total_time += multi_core.count();
 	//std::cout<<"int2binary Performance : "<<multi_core.count()<<std::endl;
 	}
 	
@@ -602,19 +604,19 @@ void xnor_convoltion_op(Matrix<T> input_matrix, Matrix<T> &output_matrix, Matrix
 	auto stop = std::chrono::high_resolution_clock::now();
 
 	std::chrono::duration<double, std::milli> multi_core(stop - start);
-	#pragma omp critical
-	{
-		total_time += multi_core.count();
-	}
+
+	total_time += multi_core.count();
 
 	//std::cout<<"Xnor Convolution Kernel Performance : "<<multi_core.count()<<std::endl;
 	}
 	{
 	auto start = std::chrono::high_resolution_clock::now();
-	binaryMat2IntMat(output_mat, hash_map);
+	binaryMat2IntMat(output_mat);
 	auto stop = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> multi_core(stop - start);
 	//std::cout<<"Binary2int Performance : "<<multi_core.count()<<std::endl;
+
+	total_time += multi_core.count();
 	}
 	MatTypeCasting<unsigned long, T>(output_mat, output_matrix);
 }
@@ -646,15 +648,17 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 	Matrix<T> padded_matrix(output_tensor.row + weight.row -1, output_tensor.col + weight.col -1);
 	ZeroPadding2D(A, padded_matrix, std::make_pair(weight.row, weight.col));
 	Matrix<float> K(padded_matrix.col - weight.col + 1, padded_matrix.row - weight.row + 1);
+	auto start = std::chrono::high_resolution_clock::now();
 	conv2D<float>(padded_matrix, K, std::make_pair(weight.row, weight.col));
+	auto stop = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double, std::milli> multi_core(stop - start);
+	total_time +=  multi_core.count();
 	{
 		int in, out;
 		Weight<T> output_tensor_buffer(output_tensor.row, output_tensor.col, weight.channel_in, weight.channel_out);
 		auto start = std::chrono::high_resolution_clock::now();
-		omp_lock_t writelock;
 
-		omp_init_lock(&writelock);
-		#pragma omp parallel private(in, out) shared(input_tensor, output_tensor_buffer, hash_map)
+		#pragma omp parallel private(in, out) shared(input_tensor, output_tensor_buffer)
  		{	
 			#pragma omp for schedule(dynamic,50) collapse(2)
 			for(int out=0; weight.channel_out>out; out++)
@@ -662,7 +666,7 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 				
 				for (int in=0; weight.channel_in>in; in++)
 				{
-					xnor_convoltion_op<float>(input_tensor[in], output_tensor_buffer[out][in], weight[out][in], hash_map);
+					xnor_convoltion_op<float>(input_tensor[in], output_tensor_buffer[out][in], weight[out][in]);
 
 				}
 				// auto A = tensorChannelSum<float>(input_tensor);
@@ -670,7 +674,6 @@ std::unordered_map<unsigned long, int> hash_map, bool padding = true)
 				// output_tensor[out] *= alpha[out];
 			}
 		}
-		omp_destroy_lock(&writelock);
 		auto stop = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double, std::milli> multi_core(stop - start);
 		//std::cout<<"Multicore xnor Kernel Performance : "<<multi_core.count()<<std::endl;

@@ -147,7 +147,6 @@ matrix_3d<T> conv2D(matrix_3d<T> input_matrix, matrix_4d<T> weight_matrix,int ro
         out.clear();
     }
     return output_matrix;
-    
 }
 
 

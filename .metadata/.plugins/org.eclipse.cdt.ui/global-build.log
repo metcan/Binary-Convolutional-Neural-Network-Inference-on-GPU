@@ -1472,3 +1472,78 @@ Invoking: NVCC Linker
 /usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./compK_final.o   
 Finished building target: deneme
  
+22:06:20 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./compK_final.o  ./compK_final.d  deneme
+ 
+22:06:20 **** Build of configuration Debug for project deneme ****
+make all 
+Building file: ../compK_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "compK_final.d" "../compK_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "compK_final.o" "../compK_final.cu"
+../compK_final.cu(172): warning: variable "elapsedTimeAddition" was declared but never referenced
+
+../compK_final.cu(177): warning: variable "hostMaskData" was set but never used
+
+../compK_final.cu(126): warning: variable "gridSize" was declared but never referenced
+
+Finished building: ../compK_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./compK_final.o   
+Finished building target: deneme
+ 
+22:06:43 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./compK_final.o  ./compK_final.d  deneme
+ 
+22:06:43 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_v1.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_v1.d" "../xnor_gpu_v1.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_v1.o" "../xnor_gpu_v1.cu"
+Finished building: ../xnor_gpu_v1.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_v1.o   
+Finished building target: deneme
+ 
+22:09:41 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+22:17:12 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+22:17:44 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+22:17:47 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+22:19:33 **** Clean-only build of configuration Debug for project deneme ****
+make clean 
+rm -rf  ./xnor_gpu_v1.o  ./xnor_gpu_v1.d  deneme
+ 
+22:19:34 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+Building file: ../xnor_gpu_final.cu
+Invoking: NVCC Compiler
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 -gencode arch=compute_61,code=sm_61  -odir "." -M -o "xnor_gpu_final.d" "../xnor_gpu_final.cu"
+/usr/local/cuda-10.2/bin/nvcc -G -g -O3 --compile --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61  -x cu -o  "xnor_gpu_final.o" "../xnor_gpu_final.cu"
+Finished building: ../xnor_gpu_final.cu
+ 
+Building target: deneme
+Invoking: NVCC Linker
+/usr/local/cuda-10.2/bin/nvcc --cudart static --relocatable-device-code=false -gencode arch=compute_61,code=compute_61 -gencode arch=compute_61,code=sm_61 -link -o  "deneme"  ./xnor_gpu_final.o   
+Finished building target: deneme
+ 
+22:45:00 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.
+22:45:03 **** Incremental Build of configuration Debug for project deneme ****
+make all 
+make: Nothing to be done for 'all'.

@@ -518,7 +518,6 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	cudaEventSynchronize(stop);
 	float milliseconds = 0;
 	cudaEventElapsedTime(&milliseconds, start, stop);
-	total_time += milliseconds;
 	//std::cout<<"Int2Binary Time= "<< milliseconds<<std::endl;
 	cudaFree(d_padded_input_tensor.arr);
 	matrix4d<unsigned int> d_convolution_buffer;
@@ -564,7 +563,6 @@ void xnor_convolution(matrix3d<float> &h_input_tensor, matrix4d<unsigned int> &h
 	cudaEventRecord(stop2, 0);
 	cudaEventSynchronize(stop2);
 	cudaEventElapsedTime(&milliseconds, start2, stop2);
-	total_time += milliseconds;
 	//std::cout<<"Summation Time= "<< milliseconds<<std::endl;
 	cudaDeviceSynchronize();
 	cudaStreamDestroy(stream1);
