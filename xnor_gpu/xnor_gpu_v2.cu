@@ -207,39 +207,39 @@ std::pair<int, int> BinaryMatMemoryAllocation( std::pair<int, int> input_size, s
 	return std::make_pair(size_x, size_y);
 }
 template <typename T>
-__global__ void compK_matrix(T* InputImageData, T kernel_value,
-    T* outputImageData, int channel_in, int width, int height) {
+__global__ void compK_matrix(T* input_data, T kernel_value,
+    T* output_data, int channel_in, int width, int height) {
 
     float accum;
     int col = threadIdx.x + blockIdx.x * blockDim.x;   //col index
     int row = threadIdx.y + blockIdx.y * blockDim.y;   //row index
-    int maskRowsRadius = maskRows / 2;
-    int maskColsRadius = maskCols / 2;
+    int mask_row_radius = mask_rows / 2;
+    int mask_col_radius = mask_cols / 2;
 
 
-    for (int k = 0; k < channel_in; k++) {      //cycle on kernel channels
+    for (int k = 0; k < channel_in; k++) {      
         if (row < height && col < width) {
             accum = 0;
-            int startRow = row - maskRowsRadius;  //row index shifted by mask radius
-            int startCol = col - maskColsRadius;  //col index shifted by mask radius
+            int start_row = row - mask_row_radius;  
+            int start_col = col - mask_col_radius;  
 
-            for (int i = 0; i < maskRows; i++) { //cycle on mask rows
+            for (int i = 0; i < mask_rows; i++) { 
 
-                for (int j = 0; j < maskCols; j++) { //cycle on mask columns
+                for (int j = 0; j < mask_cols; j++) { 
 
-                    int currentRow = startRow + i; // row index to fetch data from input image
-                    int currentCol = startCol + j; // col index to fetch data from input image
+                    int row_index = start_row + i; 
+                    int col_index = start_col + j; 
 
-                    if (currentRow >= 0 && currentRow < height && currentCol >= 0 && currentCol < width) {
+                    if (row_index >= 0 && row_index < height && col_index >= 0 && col_index < width) {
 
-                        accum += InputImageData[(currentRow * width + currentCol) * channel_in + k] *
+                        accum += input_data[(row_index * width + col_index) * channel_in + k] *
                             kernel_value;
                     }
                     else accum += 0;
                 }
 
             }
-            outputImageData[(row * width + col) * channel_in + k] = accum;
+            output_data[(row * width + col) * channel_in + k] = accum;
         }
 
     }
